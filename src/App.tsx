@@ -57,6 +57,7 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [editingOrderId, setEditingOrderId] = useState<string | null>(null);
+  const [isDownloadMenuOpen, setIsDownloadMenuOpen] = useState(false);
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -246,15 +247,41 @@ export default function App() {
   };
 
   /**
-   * Baixa a lista completa de clientes e telefones formatada em .txt
+   * Baixa a lista completa de clientes e telefones formatada em .txt (filtrada ou geral)
    */
-  const handleDownloadClientsTXT = () => {
+  const handleDownloadClientsTXT = (filterType: 'todos' | '40' | '50' | '60') => {
     if (clients.length === 0) {
       showToast("Não há clientes cadastrados para exportar.");
       return;
     }
 
-    const sortedList = [...clients].sort((a, b) => a.nome.localeCompare(b.nome));
+    let filteredList = [...clients];
+    let filename = 'clientes_alho_e_cia.txt';
+    let label = 'Todos os Contatos';
+
+    if (filterType === '40') {
+      // Clientes sem compras nos últimos 40 dias ou nunca compraram (0 totalPedidos)
+      filteredList = clients.filter(c => c.totalPedidos === 0 || (c.ultimaCompra && getDaysSince(c.ultimaCompra) > 40));
+      filename = 'clientes_alho_e_cia_inativos_40_dias.txt';
+      label = 'Sem compras +40 dias';
+    } else if (filterType === '50') {
+      // Clientes sem compras nos últimos 50 dias ou nunca compraram
+      filteredList = clients.filter(c => c.totalPedidos === 0 || (c.ultimaCompra && getDaysSince(c.ultimaCompra) > 50));
+      filename = 'clientes_alho_e_cia_inativos_50_dias.txt';
+      label = 'Sem compras +50 dias';
+    } else if (filterType === '60') {
+      // Clientes sem compras nos últimos 60 dias ou nunca compraram
+      filteredList = clients.filter(c => c.totalPedidos === 0 || (c.ultimaCompra && getDaysSince(c.ultimaCompra) > 60));
+      filename = 'clientes_alho_e_cia_inativos_60_dias.txt';
+      label = 'Sem compras +60 dias';
+    }
+
+    if (filteredList.length === 0) {
+      showToast(`Nenhum contato encontrado na categoria: ${label}`);
+      return;
+    }
+
+    const sortedList = [...filteredList].sort((a, b) => a.nome.localeCompare(b.nome));
 
     const txtContent = sortedList
       .map(c => `${c.telefone} - ${c.nome}`)
@@ -264,13 +291,13 @@ export default function App() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = 'clientes_alho_e_cia.txt';
+    link.download = filename;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
 
-    showToast("Download da lista de clientes (.txt) iniciado!");
+    showToast(`Baixando ${filteredList.length} contatos (${label})!`);
   };
 
   // --------------------------------------------------------
@@ -470,14 +497,99 @@ export default function App() {
               <Plus size={16} />
               REGISTRAR PEDIDO
             </button>
-            <button
-              onClick={handleDownloadClientsTXT}
-              title="Baixar lista de clientes e telefones em formato .txt"
-              className="bg-slate-50 hover:bg-slate-100 text-slate-700 hover:text-slate-800 text-xs font-bold font-mono px-3.5 py-2 border border-slate-200 rounded-xl transition-all flex items-center gap-2 "
-            >
-              <Download size={14} className="text-slate-500" />
-              BAIXAR TXT
-            </button>
+            <div className="relative">
+              <button
+                onClick={() => setIsDownloadMenuOpen(!isDownloadMenuOpen)}
+                title="Opções de Download da lista de contatos em formato .txt"
+                className={`text-xs font-bold font-mono px-3.5 py-2 border rounded-xl transition-all flex items-center gap-2 ${
+                  isDownloadMenuOpen 
+                    ? 'bg-slate-200 text-slate-900 border-slate-300 shadow-inner' 
+                    : 'bg-slate-50 hover:bg-slate-100 text-slate-700 hover:text-slate-800 border-slate-200'
+                }`}
+              >
+                <Download size={14} className="text-slate-500" />
+                BAIXAR TXT
+              </button>
+              
+              {isDownloadMenuOpen && (
+                <>
+                  <div 
+                    className="fixed inset-0 z-40" 
+                    onClick={() => setIsDownloadMenuOpen(false)} 
+                  />
+                  <div className="absolute right-0 top-full mt-2 w-72 bg-white rounded-2xl shadow-xl border border-slate-200 z-50 p-2.5 text-left">
+                    <span className="text-[9px] font-black tracking-wider uppercase text-slate-400 font-mono block px-2.5 pb-2 border-b border-slate-100">
+                      Exportar Contatos (.TXT)
+                    </span>
+                    <div className="mt-1.5 space-y-0.5">
+                      <button
+                        onClick={() => {
+                          handleDownloadClientsTXT('todos');
+                          setIsDownloadMenuOpen(false);
+                        }}
+                        className="w-full text-left px-2.5 py-2 hover:bg-slate-50 rounded-xl transition-colors flex items-start gap-2.5 group"
+                      >
+                        <div className="p-1.5 bg-sky-50 text-sky-600 rounded-lg group-hover:bg-sky-100 transition-colors mt-0.5">
+                          <Users size={14} />
+                        </div>
+                        <div>
+                          <p className="text-xs font-bold text-slate-900 leading-tight">Todos os Contatos</p>
+                          <p className="text-[10px] text-slate-500 font-mono mt-0.5">Sem filtros ({clients.length} contatos)</p>
+                        </div>
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          handleDownloadClientsTXT('40');
+                          setIsDownloadMenuOpen(false);
+                        }}
+                        className="w-full text-left px-2.5 py-2 hover:bg-amber-50/50 rounded-xl transition-colors flex items-start gap-2.5 group"
+                      >
+                        <div className="p-1.5 bg-amber-50 text-amber-600 rounded-lg group-hover:bg-amber-100 transition-colors mt-0.5">
+                          <Clock size={14} />
+                        </div>
+                        <div>
+                          <p className="text-xs font-bold text-slate-900 leading-tight">Inativos há +40 Dias</p>
+                          <p className="text-[10px] text-slate-500 font-mono mt-0.5">Sem compras nos últimos 40 dias</p>
+                        </div>
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          handleDownloadClientsTXT('50');
+                          setIsDownloadMenuOpen(false);
+                        }}
+                        className="w-full text-left px-2.5 py-2 hover:bg-amber-50/50 rounded-xl transition-colors flex items-start gap-2.5 group"
+                      >
+                        <div className="p-1.5 bg-amber-50 text-amber-600 rounded-lg group-hover:bg-amber-100 transition-colors mt-0.5">
+                          <Clock size={14} />
+                        </div>
+                        <div>
+                          <p className="text-xs font-bold text-slate-900 leading-tight">Inativos há +50 Dias</p>
+                          <p className="text-[10px] text-slate-500 font-mono mt-0.5">Sem compras nos últimos 50 dias</p>
+                        </div>
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          handleDownloadClientsTXT('60');
+                          setIsDownloadMenuOpen(false);
+                        }}
+                        className="w-full text-left px-2.5 py-2 hover:bg-rose-50/50 rounded-xl transition-colors flex items-start gap-2.5 group"
+                      >
+                        <div className="p-1.5 bg-rose-55 text-rose-600 rounded-lg group-hover:bg-rose-100 transition-colors mt-0.5">
+                          <Clock size={14} />
+                        </div>
+                        <div>
+                          <p className="text-xs font-bold text-slate-900 leading-tight">Inativos há +60 Dias</p>
+                          <p className="text-[10px] text-slate-500 font-mono mt-0.5">Foco em reengajamento (+60 dias)</p>
+                        </div>
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
             <button
               onClick={handleResetDatabase}
               title="Restaurar dados semente originais"
