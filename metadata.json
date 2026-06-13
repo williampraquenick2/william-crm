@@ -1,6 +1,6 @@
 {
-  "name": "CRM de Vendas de Alho",
-  "description": "Sistema completo de gestão de clientes, pedidos, rankings e relatórios acumulativos para vendas de alho.",
+  "name": "ALHO E SÓ CRM",
+  "description": "Sistema completo de gestão de clientes, pedidos, rankings e relatórios acumulativos para a ALHO E SÓ.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

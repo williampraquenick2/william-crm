@@ -5,6 +5,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { getSeededClients } from './data/initialClients';
+import { getGuarulhosSeededClients } from './data/initialClientsGuarulhos';
 import { Client, ProductType, PRODUCTS } from './types';
 import { 
   getDaysSince, 
@@ -45,15 +46,18 @@ import {
   FileText
 } from 'lucide-react';
 
-const LOCAL_STORAGE_KEY = 'alho_crm_clients_v3_data';
+const getLocalStorageKey = (unit: 'SP' | 'Guarulhos') => {
+  return unit === 'SP' ? 'alho_crm_clients_v3_data_sp' : 'alho_crm_clients_v3_data_guarulhos';
+};
 
 export default function App() {
   // --------------------------------------------------------
   // State variables
   // --------------------------------------------------------
+  const [activeUnit, setActiveUnit] = useState<'SP' | 'Guarulhos' | null>(null);
   const [clients, setClients] = useState<Client[]>([]);
   const [activeTab, setActiveTab] = useState<'clientes' | 'rankings' | 'relatorios'>('clientes');
-  const [selectedSegment, setSelectedSegment] = useState<'todos' | 'sem-nome' | 'inativos-60' | 'inativos-90' | 'uma-compra' | 'top-20'>('todos');
+  const [selectedSegment, setSelectedSegment] = useState<'todos' | 'sem-nome' | 'inativos-30' | 'inativos-60' | 'inativos-90' | 'uma-compra' | 'top-20'>('todos');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [editingOrderId, setEditingOrderId] = useState<string | null>(null);
@@ -75,28 +79,37 @@ export default function App() {
   // Load initial dataset from localStorage or seed
   // --------------------------------------------------------
   useEffect(() => {
-    const cached = localStorage.getItem(LOCAL_STORAGE_KEY);
+    if (!activeUnit) {
+      setClients([]);
+      setSelectedClient(null);
+      return;
+    }
+    const key = getLocalStorageKey(activeUnit);
+    const cached = localStorage.getItem(key);
     if (cached) {
       try {
         setClients(JSON.parse(cached));
       } catch (err) {
         // Fallback to seeds on corruption
         console.error("Erro ao carregar dados do LocalStorage, reiniciando semente.", err);
-        const seeds = getSeededClients();
+        const seeds = activeUnit === 'SP' ? getSeededClients() : getGuarulhosSeededClients();
         setClients(seeds);
-        localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(seeds));
+        localStorage.setItem(key, JSON.stringify(seeds));
       }
     } else {
-      const seeds = getSeededClients();
+      const seeds = activeUnit === 'SP' ? getSeededClients() : getGuarulhosSeededClients();
       setClients(seeds);
-      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(seeds));
+      localStorage.setItem(key, JSON.stringify(seeds));
     }
-  }, []);
+    setSelectedClient(null);
+  }, [activeUnit]);
 
   // Sync state to localStorage whenever changed
   const saveToStorage = (updatedClients: Client[]) => {
     setClients(updatedClients);
-    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(updatedClients));
+    if (activeUnit) {
+      localStorage.setItem(getLocalStorageKey(activeUnit), JSON.stringify(updatedClients));
+    }
   };
 
   const showToast = (msg: string) => {
@@ -205,11 +218,13 @@ export default function App() {
    * Reseta o banco de dados de volta à semente inicial do Excel (para fins de testes limpos)
    */
   const handleResetDatabase = () => {
-    if (window.confirm("Atenção! Isso irá apagar todos os novos pedidos e redefinir o banco de dados com os dados semente da planilha. Deseja continuar?")) {
-      const seeds = getSeededClients();
+    if (!activeUnit) return;
+    const unitName = activeUnit === 'SP' ? 'São Paulo' : 'Guarulhos';
+    if (window.confirm(`Atenção! Isso irá apagar todos os novos pedidos e redefinir o banco de dados de ${unitName} com os dados semente da planilha. Deseja continuar?`)) {
+      const seeds = activeUnit === 'SP' ? getSeededClients() : getGuarulhosSeededClients();
       saveToStorage(seeds);
       setSelectedClient(null);
-      showToast("Banco de dados restaurado com sucesso para o estado semente!");
+      showToast(`Banco de dados de ${unitName} restaurado com sucesso para o estado semente!`);
     }
   };
 
@@ -256,23 +271,23 @@ export default function App() {
     }
 
     let filteredList = [...clients];
-    let filename = 'clientes_alho_e_cia.txt';
+    let filename = 'clientes_alho_e_so.txt';
     let label = 'Todos os Contatos';
 
     if (filterType === '40') {
       // Clientes sem compras nos últimos 40 dias ou nunca compraram (0 totalPedidos)
       filteredList = clients.filter(c => c.totalPedidos === 0 || (c.ultimaCompra && getDaysSince(c.ultimaCompra) > 40));
-      filename = 'clientes_alho_e_cia_inativos_40_dias.txt';
+      filename = 'clientes_alho_e_so_inativos_40_dias.txt';
       label = 'Sem compras +40 dias';
     } else if (filterType === '50') {
       // Clientes sem compras nos últimos 50 dias ou nunca compraram
       filteredList = clients.filter(c => c.totalPedidos === 0 || (c.ultimaCompra && getDaysSince(c.ultimaCompra) > 50));
-      filename = 'clientes_alho_e_cia_inativos_50_dias.txt';
+      filename = 'clientes_alho_e_so_inativos_50_dias.txt';
       label = 'Sem compras +50 dias';
     } else if (filterType === '60') {
       // Clientes sem compras nos últimos 60 dias ou nunca compraram
       filteredList = clients.filter(c => c.totalPedidos === 0 || (c.ultimaCompra && getDaysSince(c.ultimaCompra) > 60));
-      filename = 'clientes_alho_e_cia_inativos_60_dias.txt';
+      filename = 'clientes_alho_e_so_inativos_60_dias.txt';
       label = 'Sem compras +60 dias';
     }
 
@@ -382,6 +397,10 @@ export default function App() {
     if (selectedSegment === 'sem-nome') {
       list = list.filter(c => c.nome.startsWith('SEM NOME'));
     } 
+    else if (selectedSegment === 'inativos-30') {
+      // Pedidos feitos mas última compra há mais de 30 dias
+      list = list.filter(c => c.totalPedidos > 0 && getDaysSince(c.ultimaCompra) > 30);
+    }
     else if (selectedSegment === 'inativos-60') {
       // Pedidos feitos mas última compra há mais de 60 dias
       list = list.filter(c => c.totalPedidos > 0 && getDaysSince(c.ultimaCompra) > 60);
@@ -413,6 +432,7 @@ export default function App() {
   
   // Active = purchased within last 60 days. Inactive = hasn't purchased in >60 days
   const activeCount = clients.filter(c => c.totalPedidos > 0 && getDaysSince(c.ultimaCompra) <= 60).length;
+  const inactive30Count = clients.filter(c => c.totalPedidos > 0 && getDaysSince(c.ultimaCompra) > 30).length;
   const inactive60Count = clients.filter(c => c.totalPedidos > 0 && getDaysSince(c.ultimaCompra) > 60).length;
   const inactive90Count = clients.filter(c => c.totalPedidos > 0 && getDaysSince(c.ultimaCompra) > 90).length;
   
@@ -458,6 +478,76 @@ export default function App() {
   const productSalesReport = getProductSalesReport(clients);
   const periodSalesReport = getPeriodSalesReport(clients);
 
+  if (!activeUnit) {
+    return (
+      <div className="min-h-screen bg-slate-900 text-slate-100 flex flex-col items-center justify-center p-6 font-sans">
+        <div className="max-w-xl w-full text-center space-y-8">
+          <div className="space-y-3">
+            <div className="bg-amber-500 text-slate-950 p-5 rounded-3xl inline-block shadow-2xl relative">
+              <span className="text-4xl">🧄</span>
+            </div>
+            <h1 className="text-3xl font-black tracking-tight uppercase text-white mt-4">
+              ALHO E SÓ CRM
+            </h1>
+            <p className="text-sm font-mono text-slate-400">
+              Sistema de Gestão de Clientes, Pedidos e Rankings
+            </p>
+          </div>
+
+          <div className="bg-slate-950 border border-slate-800 p-8 rounded-3xl shadow-3xl space-y-6">
+            <h2 className="text-sm font-black font-mono tracking-widest text-slate-500 uppercase">
+              ESCOLHA UMA UNIDADE
+            </h2>
+
+            <div className="grid grid-cols-1 gap-4">
+              <button
+                type="button"
+                id="btn-unit-sp"
+                onClick={() => setActiveUnit('SP')}
+                className="group relative flex flex-col items-start p-5 bg-gradient-to-r from-slate-900 to-slate-950 hover:from-amber-550 hover:to-amber-600 rounded-2xl border border-slate-800 hover:border-transparent text-left transition-all duration-300 transform hover:-translate-y-1 hover:bg-slate-800 cursor-pointer w-full text-white hover:text-white"
+              >
+                <div className="flex items-center justify-between w-full">
+                  <span className="font-black text-slate-105 font-mono text-lg uppercase tracking-tight group-hover:text-amber-400">
+                    [ CRM SÃO PAULO ]
+                  </span>
+                  <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                    Ativo SP
+                  </span>
+                </div>
+                <p className="text-xs text-slate-400 mt-2 font-sans select-none leading-relaxed">
+                  Mantém todos os clientes cadastrados anteriormente, históricos e relatórios de São Paulo.
+                </p>
+              </button>
+
+              <button
+                type="button"
+                id="btn-unit-gru"
+                onClick={() => setActiveUnit('Guarulhos')}
+                className="group relative flex flex-col items-start p-5 bg-gradient-to-r from-slate-900 to-slate-950 hover:from-amber-550 hover:to-amber-600 rounded-2xl border border-slate-800 hover:border-transparent text-left transition-all duration-300 transform hover:-translate-y-1 hover:bg-slate-800 cursor-pointer w-full text-white hover:text-white"
+              >
+                <div className="flex items-center justify-between w-full">
+                  <span className="font-black text-slate-105 font-mono text-lg uppercase tracking-tight group-hover:text-amber-400">
+                    [ CRM GUARULHOS ]
+                  </span>
+                  <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                    Ativo GRU
+                  </span>
+                </div>
+                <p className="text-xs text-slate-400 mt-2 font-sans select-none leading-relaxed">
+                  Importação dos clientes do arquivo TXT de Guarulhos. Rankings e relatórios independentes.
+                </p>
+              </button>
+            </div>
+          </div>
+
+          <div className="text-[10px] font-mono text-slate-500 select-none">
+            ALHO E SÓ CRM © 2026 • Os bancos de dados não são misturados.
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 flex flex-col font-sans transition-all selection:bg-amber-100">
       
@@ -470,12 +560,12 @@ export default function App() {
             </div>
             <div>
               <h1 className="text-lg font-black uppercase text-slate-900 tracking-tight flex items-center gap-2 leading-tight">
-                Alho & Cia
-                <span className="text-[10px] bg-slate-900 text-amber-400 font-mono font-medium px-2 py-0.5 rounded-full uppercase tracking-wider">
-                  CRM v2.5
+                ALHO E SÓ
+                <span className="text-[10px] bg-slate-900 text-amber-400 font-mono font-black px-2 py-0.5 rounded-full uppercase tracking-wider">
+                  {activeUnit === 'SP' ? 'CRM SÃO PAULO' : 'CRM GUARULHOS'}
                 </span>
               </h1>
-              <p className="text-[11px] text-slate-500 font-mono">Painel Administrativo de Gestão</p>
+              <p className="text-[11px] text-slate-500 font-mono">Painel Administrativo • Unidade {activeUnit === 'SP' ? 'São Paulo' : 'Guarulhos'}</p>
             </div>
           </div>
 
@@ -590,6 +680,13 @@ export default function App() {
                 </>
               )}
             </div>
+            <button
+              onClick={() => setActiveUnit(null)}
+              title="Trocar de Unidade / Voltar para Início"
+              className="text-slate-400 hover:text-amber-500 p-2 rounded-xl hover:bg-amber-50 border border-transparent hover:border-amber-100 transition-colors"
+            >
+              <Map size={16} />
+            </button>
             <button
               onClick={handleResetDatabase}
               title="Restaurar dados semente originais"
@@ -713,6 +810,7 @@ export default function App() {
                     {[
                       { id: 'todos', label: 'Todos' },
                       { id: 'sem-nome', label: 'Sem Nome' },
+                      { id: 'inativos-30', label: 'Inativos +30 dias' },
                       { id: 'inativos-60', label: 'Inativos +60 dias' },
                       { id: 'inativos-90', label: 'Inativos +90 dias' },
                       { id: 'uma-compra', label: 'Apenas 1 Compra' },
@@ -1183,6 +1281,10 @@ export default function App() {
                       <span className="font-extrabold text-emerald-600 font-mono bg-emerald-55/40 px-2 py-0.5 rounded">{activeCount}</span>
                     </div>
                     <div className="flex items-center justify-between">
+                      <span className="font-bold text-slate-600">Clientes Inativos (&gt; 30 dias)</span>
+                      <span className="font-extrabold text-indigo-600 font-mono bg-indigo-50 px-2 py-0.5 rounded">{inactive30Count}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
                       <span className="font-bold text-slate-600">Clientes Inativos (&gt; 60 dias)</span>
                       <span className="font-extrabold text-amber-600 font-mono bg-amber-50 px-2 py-0.5 rounded">{inactive60Count}</span>
                     </div>
@@ -1239,7 +1341,7 @@ export default function App() {
 
       {/* Humble Footer */}
       <footer className="bg-white border-t border-slate-100 py-6 mt-12 text-center text-xs font-mono text-slate-400 select-none">
-        <p>Alho & Cia CRM © 2026 • Estado Operacional Estável • Banco de Dados Local Ativo</p>
+        <p>ALHO E SÓ CRM © 2026 • Estado Operacional Estável • Banco de Dados Local Ativo</p>
       </footer>
     </div>
   );

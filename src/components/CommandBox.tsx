@@ -54,7 +54,7 @@ export default function CommandBox({ onExecuteCommand }: CommandBoxProps) {
         </div>
         <div>
           <h2 className="text-md font-semibold tracking-tight text-slate-100 flex items-center gap-2">
-            Terminal de Comandos CRM Alho
+            Terminal de Comandos ALHO E SÓ
             <span className="bg-emerald-500/20 text-emerald-300 text-xs px-2 py-0.5 rounded-full font-mono">
               Ativo
             </span>
