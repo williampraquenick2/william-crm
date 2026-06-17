@@ -88,7 +88,39 @@ export default function App() {
     const cached = localStorage.getItem(key);
     if (cached) {
       try {
-        setClients(JSON.parse(cached));
+        const loaded: Client[] = JSON.parse(cached);
+        const seeds = activeUnit === 'SP' ? getSeededClients() : getGuarulhosSeededClients();
+        let hasChanges = false;
+        
+        const merged = loaded.map(lc => {
+          const seedMatch = seeds.find(sc => sc.telefone === lc.telefone);
+          if (seedMatch && !seedMatch.nome.startsWith('SEM NOME') && lc.nome.startsWith('SEM NOME')) {
+            hasChanges = true;
+            return {
+              ...lc,
+              nome: seedMatch.nome,
+              historico: lc.historico.length === 0 ? seedMatch.historico : lc.historico,
+              ultimaCompra: lc.historico.length === 0 ? seedMatch.ultimaCompra : lc.ultimaCompra,
+              totaisPorProduto: lc.historico.length === 0 ? seedMatch.totaisPorProduto : lc.totaisPorProduto,
+              totalPedidos: lc.historico.length === 0 ? seedMatch.totalPedidos : lc.totalPedidos,
+              totalProdutosComprados: lc.historico.length === 0 ? seedMatch.totalProdutosComprados : lc.totalProdutosComprados
+            };
+          }
+          return lc;
+        });
+
+        const missing = seeds.filter(sc => !loaded.some(lc => lc.telefone === sc.telefone));
+        if (missing.length > 0) {
+          hasChanges = true;
+          merged.push(...missing);
+        }
+
+        if (hasChanges) {
+          setClients(merged);
+          localStorage.setItem(key, JSON.stringify(merged));
+        } else {
+          setClients(loaded);
+        }
       } catch (err) {
         // Fallback to seeds on corruption
         console.error("Erro ao carregar dados do LocalStorage, reiniciando semente.", err);
