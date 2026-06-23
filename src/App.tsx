@@ -50,6 +50,20 @@ const getLocalStorageKey = (unit: 'SP' | 'Guarulhos') => {
   return unit === 'SP' ? 'alho_crm_clients_v3_data_sp' : 'alho_crm_clients_v3_data_guarulhos';
 };
 
+const PRODUCT_EMOJIS: Record<ProductType, string> = {
+  '500G PURO': '🥇',
+  '250G PURO': '🥈',
+  'ALHO TEMPERADO': '🍗',
+  'TEMPERO COMPLETO': '🧂',
+  'TEMPERO DE BACON': '🥓',
+  'CHIMICHURRI': '🌿',
+  'ANA MARIA': '🌸',
+  'PAPRICA DEFUMADA': '🌶️',
+  'PEGA MARIDO': '💍',
+  'TEMPERO PARA FEIJÃO': '🍲',
+  'SAL DO HIMALAIA': '🏔'
+};
+
 export default function App() {
   // --------------------------------------------------------
   // State variables
@@ -71,6 +85,10 @@ export default function App() {
   const [isNewOrderOpen, setIsNewOrderOpen] = useState(false);
   const [isNewClientOpen, setIsNewClientOpen] = useState(false);
   const [prefilledClientInOrder, setPrefilledClientInOrder] = useState<Client | null>(null);
+
+  // Renaming client states
+  const [renamingTelefone, setRenamingTelefone] = useState<string | null>(null);
+  const [newNameValue, setNewNameValue] = useState<string>('');
 
   // Stats toast alert state
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -244,6 +262,28 @@ export default function App() {
     saveToStorage(updated);
     setSelectedClient(newClient); // Automatically highlight the newly created client
     showToast(`Cliente "${clientData.nome}" cadastrado com sucesso!`);
+  };
+
+  /**
+   * Atualiza o nome de um cliente existente
+   */
+  const handleUpdateClientName = (telefone: string, newNome: string) => {
+    if (!newNome || !newNome.trim()) {
+      showToast("Por favor, digite um nome válido.");
+      return;
+    }
+    const updated = clients.map(client => {
+      if (client.telefone === telefone) {
+        return {
+          ...client,
+          nome: newNome.trim()
+        };
+      }
+      return client;
+    });
+
+    saveToStorage(updated);
+    showToast(`Nome do cliente atualizado com sucesso!`);
   };
 
   /**
@@ -909,12 +949,62 @@ export default function App() {
                             >
                               <td className="py-3.5 pr-2">
                                 <div className="flex flex-col">
-                                  <span className="text-xs font-bold text-slate-800 uppercase tracking-tight flex items-center gap-1.5">
-                                    {client.nome}
-                                    {client.nome.startsWith('SEM NOME') && (
-                                      <span className="bg-slate-100 text-slate-500 text-[9px] px-1.5 py-0.2 rounded font-mono">S/N</span>
-                                    )}
-                                  </span>
+                                  {renamingTelefone === client.telefone ? (
+                                    <div className="flex items-center gap-1.5 py-1" onClick={(e) => e.stopPropagation()}>
+                                      <input 
+                                        type="text"
+                                        value={newNameValue}
+                                        onChange={(e) => setNewNameValue(e.target.value)}
+                                        className="bg-white border-2 border-amber-500 text-xs px-2 py-1 rounded font-bold uppercase text-slate-800 focus:outline-none focus:ring-1 focus:ring-amber-500 w-full max-w-[180px]"
+                                        placeholder="Nome"
+                                        autoFocus
+                                        onKeyDown={(e) => {
+                                          if (e.key === 'Enter') {
+                                            handleUpdateClientName(client.telefone, newNameValue);
+                                            setRenamingTelefone(null);
+                                          } else if (e.key === 'Escape') {
+                                            setRenamingTelefone(null);
+                                          }
+                                        }}
+                                      />
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          handleUpdateClientName(client.telefone, newNameValue);
+                                          setRenamingTelefone(null);
+                                        }}
+                                        className="bg-emerald-500 hover:bg-emerald-600 text-white font-extrabold text-[10px] px-2 py-1 rounded"
+                                      >
+                                        OK
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => setRenamingTelefone(null)}
+                                        className="bg-slate-300 hover:bg-slate-400 text-slate-700 font-extrabold text-[10px] px-2 py-1 rounded"
+                                      >
+                                        X
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <span className="text-xs font-bold text-slate-800 uppercase tracking-tight flex items-center gap-1.5 flex-wrap">
+                                      {client.nome}
+                                      {client.nome.startsWith('SEM NOME') && (
+                                        <span className="bg-slate-100 text-slate-500 text-[9px] px-1.5 py-0.2 rounded font-mono">S/N</span>
+                                      )}
+                                      <button
+                                        type="button"
+                                        title="Alterar Nome"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setRenamingTelefone(client.telefone);
+                                          setNewNameValue(client.nome.startsWith('SEM NOME') ? '' : client.nome);
+                                        }}
+                                        className="p-1 rounded text-slate-400 hover:text-amber-600 hover:bg-slate-100 transition-all flex items-center justify-center shrink-0"
+                                      >
+                                        <Pencil size={11} />
+                                      </button>
+                                    </span>
+                                  )}
                                   <span className="text-[10px] text-slate-400 font-mono">
                                     {formatPhoneNumber(client.telefone)}
                                   </span>
@@ -1016,9 +1106,61 @@ export default function App() {
                         </button>
                       </div>
 
-                      <h3 className="text-md font-bold text-slate-100 tracking-tight leading-none uppercase">
-                        {selectedClient.nome}
-                      </h3>
+                      {renamingTelefone === selectedClient.telefone ? (
+                        <div className="flex items-center gap-1.5 mt-1" onClick={(e) => e.stopPropagation()}>
+                          <input 
+                            type="text"
+                            value={newNameValue}
+                            onChange={(e) => setNewNameValue(e.target.value)}
+                            className="bg-slate-800 border-2 border-amber-500 text-xs px-2 py-1.5 rounded font-bold uppercase text-white focus:outline-none focus:ring-1 focus:ring-amber-500 w-full max-w-[200px]"
+                            placeholder="Novo nome"
+                            autoFocus
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                handleUpdateClientName(selectedClient.telefone, newNameValue);
+                                setRenamingTelefone(null);
+                              } else if (e.key === 'Escape') {
+                                setRenamingTelefone(null);
+                              }
+                            }}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              handleUpdateClientName(selectedClient.telefone, newNameValue);
+                              setRenamingTelefone(null);
+                            }}
+                            className="bg-emerald-500 hover:bg-emerald-600 text-white font-extrabold text-[10px] px-2.5 py-1.5 rounded transition-all"
+                          >
+                            Salvar
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setRenamingTelefone(null)}
+                            className="bg-slate-700 hover:bg-slate-600 text-slate-300 font-extrabold text-[10px] px-2.5 py-1.5 rounded transition-all"
+                          >
+                            X
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <h3 className="text-md font-bold text-slate-100 tracking-tight leading-none uppercase">
+                            {selectedClient.nome}
+                          </h3>
+                          <button
+                            type="button"
+                            title="Alterar Nome"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setRenamingTelefone(selectedClient.telefone);
+                              setNewNameValue(selectedClient.nome.startsWith('SEM NOME') ? '' : selectedClient.nome);
+                            }}
+                            className="p-1 rounded text-slate-400 hover:text-amber-500 hover:bg-slate-800 transition-all flex items-center justify-center shrink-0"
+                          >
+                            <Pencil size={12} />
+                          </button>
+                        </div>
+                      )}
                       <p className="text-xs text-slate-400 font-mono mt-1.5 flex items-center gap-1.5">
                         <span className="text-slate-500">Tel:</span>
                         {formatPhoneNumber(selectedClient.telefone)}
@@ -1183,42 +1325,16 @@ export default function App() {
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 
-                {/* RANK 1: 500G PURO */}
-                <RankingWidget 
-                  title="🥇 Mais Compraram 500G PURO" 
-                  data={getRankByProductType('500G PURO')} 
-                  metricExtractor={(c) => c.totaisPorProduto['500G PURO']} 
-                />
+                {PRODUCTS.map(prod => (
+                  <RankingWidget 
+                    key={prod}
+                    title={`${PRODUCT_EMOJIS[prod] || '📦'} Mais Compraram ${prod}`} 
+                    data={getRankByProductType(prod)} 
+                    metricExtractor={(c) => c.totaisPorProduto[prod] || 0} 
+                  />
+                ))}
 
-                {/* RANK 2: 250G PURO */}
-                <RankingWidget 
-                  title="🥈 Mais Compraram 250G PURO" 
-                  data={getRankByProductType('250G PURO')} 
-                  metricExtractor={(c) => c.totaisPorProduto['250G PURO']} 
-                />
-
-                {/* RANK 3: ALHO TEMPERADO */}
-                <RankingWidget 
-                  title="🍗 Mais Compraram ALHO TEMPERADO" 
-                  data={getRankByProductType('ALHO TEMPERADO')} 
-                  metricExtractor={(c) => c.totaisPorProduto['ALHO TEMPERADO']} 
-                />
-
-                {/* RANK 4: TEMPERO COMPLETO */}
-                <RankingWidget 
-                  title="🧂 Mais Compraram TEMPERO COMPLETO" 
-                  data={getRankByProductType('TEMPERO COMPLETO')} 
-                  metricExtractor={(c) => c.totaisPorProduto['TEMPERO COMPLETO']} 
-                />
-
-                {/* RANK 5: TEMPERO DE BACON */}
-                <RankingWidget 
-                  title="🥓 Mais Compraram TEMPERO DE BACON" 
-                  data={getRankByProductType('TEMPERO DE BACON')} 
-                  metricExtractor={(c) => c.totaisPorProduto['TEMPERO DE BACON']} 
-                />
-
-                {/* RANK 6: TOTAL PEDIDOS */}
+                {/* RANK: TOTAL PEDIDOS */}
                 <RankingWidget 
                   title="🛍️ Clientes com mais Pedidos" 
                   data={getRankMostOrders()} 
@@ -1226,7 +1342,7 @@ export default function App() {
                   unit="compras"
                 />
 
-                {/* RANK 7: TOTAL PRODUTOS COMPRADOS */}
+                {/* RANK: TOTAL PRODUTOS COMPRADOS */}
                 <RankingWidget 
                   title="📊 Clientes que mais compraram no Total" 
                   data={getRankTotalBoughtOverall()} 
@@ -1349,6 +1465,7 @@ export default function App() {
         clients={clients}
         initialSelectedClient={prefilledClientInOrder}
         onSaveOrder={handleSaveOrder}
+        onUpdateClientName={handleUpdateClientName}
       />
 
       <NewClientModal 
@@ -1387,6 +1504,7 @@ interface RankingWidgetProps {
   data: Client[];
   metricExtractor: (c: Client) => number;
   unit?: string;
+  key?: React.Key;
 }
 
 function RankingWidget({ title, data, metricExtractor, unit = "unid." }: RankingWidgetProps) {

@@ -8,14 +8,26 @@ export type ProductType =
   | '250G PURO' 
   | 'ALHO TEMPERADO' 
   | 'TEMPERO COMPLETO' 
-  | 'TEMPERO DE BACON';
+  | 'TEMPERO DE BACON'
+  | 'CHIMICHURRI'
+  | 'ANA MARIA'
+  | 'PAPRICA DEFUMADA'
+  | 'PEGA MARIDO'
+  | 'TEMPERO PARA FEIJÃO'
+  | 'SAL DO HIMALAIA';
 
 export const PRODUCTS: ProductType[] = [
   '500G PURO',
   '250G PURO',
   'ALHO TEMPERADO',
   'TEMPERO COMPLETO',
-  'TEMPERO DE BACON'
+  'TEMPERO DE BACON',
+  'CHIMICHURRI',
+  'ANA MARIA',
+  'PAPRICA DEFUMADA',
+  'PEGA MARIDO',
+  'TEMPERO PARA FEIJÃO',
+  'SAL DO HIMALAIA'
 ];
 
 export interface OrderItem {

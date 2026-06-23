@@ -5,7 +5,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Client, ProductType, PRODUCTS } from '../types';
-import { X, Search, Plus, Minus, Calendar, ShoppingBag, UserCheck } from 'lucide-react';
+import { X, Search, Plus, Minus, Calendar, ShoppingBag, UserCheck, Pencil } from 'lucide-react';
 import { CURRENT_DATE_STR, formatDateBR } from '../utils/crmUtils';
 
 interface NewOrderModalProps {
@@ -14,6 +14,7 @@ interface NewOrderModalProps {
   clients: Client[];
   initialSelectedClient?: Client | null;
   onSaveOrder: (telefone: string, date: string, items: { produto: ProductType; quantidade: number }[]) => void;
+  onUpdateClientName?: (telefone: string, newNome: string) => void;
 }
 
 export default function NewOrderModal({
@@ -21,24 +22,29 @@ export default function NewOrderModal({
   onClose,
   clients,
   initialSelectedClient,
-  onSaveOrder
+  onSaveOrder,
+  onUpdateClientName
 }: NewOrderModalProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [orderDate, setOrderDate] = useState(CURRENT_DATE_STR);
   
-  // Quantities for each of the 5 garlic products
-  const [quantities, setQuantities] = useState<Record<ProductType, number>>({
-    '500G PURO': 0,
-    '250G PURO': 0,
-    'ALHO TEMPERADO': 0,
-    'TEMPERO COMPLETO': 0,
-    'TEMPERO DE BACON': 0
+  // Quantities for each of the products
+  const [quantities, setQuantities] = useState<Record<ProductType, number>>(() => {
+    const initial = {} as Record<ProductType, number>;
+    PRODUCTS.forEach(p => {
+      initial[p] = 0;
+    });
+    return initial;
   });
 
   const [searchResults, setSearchResults] = useState<Client[]>([]);
   const [showSearchDropdown, setShowSearchDropdown] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
+
+  // States for inline renaming within the order modal
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [tempName, setTempName] = useState('');
 
   // Sync initial client selection if provided from parent (e.g. clicking "Novo Pedido" directly on a client record)
   useEffect(() => {
@@ -67,6 +73,17 @@ export default function NewOrderModal({
     setSearchResults(filtered);
     setShowSearchDropdown(true);
   }, [searchQuery, clients, selectedClient]);
+
+  // Keep selected client in sync with latest list updates (e.g., when renaming)
+  useEffect(() => {
+    if (selectedClient) {
+      const fresh = clients.find(c => c.telefone === selectedClient.telefone);
+      if (fresh) {
+        setSelectedClient(fresh);
+        setSearchQuery(fresh.nome);
+      }
+    }
+  }, [clients]);
 
   if (!isOpen) return null;
 
@@ -121,13 +138,11 @@ export default function NewOrderModal({
     onSaveOrder(selectedClient.telefone, orderDate, itemsToSave);
     
     // Reset quantities and states
-    setQuantities({
-      '500G PURO': 0,
-      '250G PURO': 0,
-      'ALHO TEMPERADO': 0,
-      'TEMPERO COMPLETO': 0,
-      'TEMPERO DE BACON': 0
+    const resetQty = {} as Record<ProductType, number>;
+    PRODUCTS.forEach(p => {
+      resetQty[p] = 0;
     });
+    setQuantities(resetQty);
     setSelectedClient(null);
     setSearchQuery('');
     setOrderDate(CURRENT_DATE_STR);
@@ -215,7 +230,63 @@ export default function NewOrderModal({
             {selectedClient && (
               <div className="bg-slate-50 border border-slate-100 rounded-xl p-3 text-xs flex items-center justify-between text-slate-600">
                 <div>
-                  <span className="font-semibold text-slate-700">Comprador ativo:</span> {selectedClient.nome}
+                  {isEditingName ? (
+                    <div className="flex items-center gap-1.5 flex-wrap py-0.5">
+                      <span className="font-semibold text-slate-700">Comprador ativo:</span>
+                      <input
+                        type="text"
+                        value={tempName}
+                        onChange={(e) => setTempName(e.target.value)}
+                        placeholder="Novo nome"
+                        className="bg-white border-2 border-amber-500 rounded px-2 py-0.5 text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-amber-500 font-bold uppercase w-full max-w-[160px]"
+                        autoFocus
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            if (tempName.trim() && onUpdateClientName) {
+                              onUpdateClientName(selectedClient.telefone, tempName);
+                              setIsEditingName(false);
+                            }
+                          } else if (e.key === 'Escape') {
+                            setIsEditingName(false);
+                          }
+                        }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (tempName.trim() && onUpdateClientName) {
+                            onUpdateClientName(selectedClient.telefone, tempName);
+                            setIsEditingName(false);
+                          }
+                        }}
+                        className="bg-emerald-500 hover:bg-emerald-600 text-white font-extrabold text-[9px] px-2 py-0.5 rounded"
+                      >
+                        OK
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setIsEditingName(false)}
+                        className="bg-slate-200 hover:bg-slate-300 text-slate-600 font-extrabold text-[9px] px-2 py-0.5 rounded"
+                      >
+                        X
+                      </button>
+                    </div>
+                  ) : (
+                    <span className="font-semibold text-slate-700 flex items-center gap-1.5 flex-wrap">
+                      Comprador ativo: <span className="font-bold text-amber-600">{selectedClient.nome}</span>
+                      <button
+                        type="button"
+                        title="Alterar Nome"
+                        onClick={() => {
+                          setTempName(selectedClient.nome.startsWith('SEM NOME') ? '' : selectedClient.nome);
+                          setIsEditingName(true);
+                        }}
+                        className="p-1 rounded text-slate-400 hover:text-amber-600 hover:bg-slate-200 transition-all flex items-center justify-center"
+                      >
+                        <Pencil size={11} />
+                      </button>
+                    </span>
+                  )}
                   <p className="text-[10px] text-slate-400 font-mono">Tel: {selectedClient.telefone} | Última Compra: {formatOrderDate(selectedClient.ultimaCompra)}</p>
                 </div>
                 <button
@@ -224,7 +295,7 @@ export default function NewOrderModal({
                     setSelectedClient(null);
                     setSearchQuery('');
                   }}
-                  className="text-[10px] text-rose-500 hover:underline hover:text-rose-700 uppercase font-bold font-mono"
+                  className="text-[10px] text-rose-500 hover:underline hover:text-rose-700 uppercase font-bold font-mono shrink-0 ml-2"
                 >
                   Limpar
                 </button>

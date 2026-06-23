@@ -608,13 +608,10 @@ const REAL_PURCHASES: Record<string, string> = {
 
 // Helper to seed a client with a history of orders
 export function seedClientHistory(telefone: string, nome: string, index: number): Client {
-  const totaisPorProduto: Record<ProductType, number> = {
-    '500G PURO': 0,
-    '250G PURO': 0,
-    'ALHO TEMPERADO': 0,
-    'TEMPERO COMPLETO': 0,
-    'TEMPERO DE BACON': 0
-  };
+  const totaisPorProduto: Record<ProductType, number> = {} as any;
+  PRODUCTS.forEach(p => {
+    totaisPorProduto[p] = 0;
+  });
 
   const historico = [];
   const purchaseStr = REAL_PURCHASES[telefone];

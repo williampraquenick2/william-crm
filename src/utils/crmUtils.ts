@@ -64,13 +64,10 @@ export function recalculateClientMetrics(historico: PurchaseOrder[]): {
   totalPedidos: number;
   totalProdutosComprados: number;
 } {
-  const totaisPorProduto: Record<ProductType, number> = {
-    '500G PURO': 0,
-    '250G PURO': 0,
-    'ALHO TEMPERADO': 0,
-    'TEMPERO COMPLETO': 0,
-    'TEMPERO DE BACON': 0
-  };
+  const totaisPorProduto: Record<ProductType, number> = {} as any;
+  PRODUCTS.forEach(p => {
+    totaisPorProduto[p] = 0;
+  });
 
   let totalProdutosComprados = 0;
 
@@ -113,13 +110,10 @@ export function searchClients(clients: Client[], query: string): Client[] {
  * Gera relatório de vendas agrupado por produto
  */
 export function getProductSalesReport(clients: Client[]): Record<ProductType, { unidades: number, clientesUnicos: number }> {
-  const report: Record<ProductType, { unidades: number, clientesUnicos: number }> = {
-    '500G PURO': { unidades: 0, clientesUnicos: 0 },
-    '250G PURO': { unidades: 0, clientesUnicos: 0 },
-    'ALHO TEMPERADO': { unidades: 0, clientesUnicos: 0 },
-    'TEMPERO COMPLETO': { unidades: 0, clientesUnicos: 0 },
-    'TEMPERO DE BACON': { unidades: 0, clientesUnicos: 0 }
-  };
+  const report: Record<ProductType, { unidades: number, clientesUnicos: number }> = {} as any;
+  PRODUCTS.forEach(p => {
+    report[p] = { unidades: 0, clientesUnicos: 0 };
+  });
 
   clients.forEach(c => {
     PRODUCTS.forEach(p => {

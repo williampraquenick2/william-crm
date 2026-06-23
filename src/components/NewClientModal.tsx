@@ -31,12 +31,12 @@ export default function NewClientModal({
   const [firstOrderDate, setFirstOrderDate] = useState(CURRENT_DATE_STR);
   
   // Quantities for first order items
-  const [quantities, setQuantities] = useState<Record<ProductType, number>>({
-    '500G PURO': 0,
-    '250G PURO': 0,
-    'ALHO TEMPERADO': 0,
-    'TEMPERO COMPLETO': 0,
-    'TEMPERO DE BACON': 0
+  const [quantities, setQuantities] = useState<Record<ProductType, number>>(() => {
+    const initial = {} as Record<ProductType, number>;
+    PRODUCTS.forEach(p => {
+      initial[p] = 0;
+    });
+    return initial;
   });
 
   const [validationError, setValidationError] = useState<string | null>(null);
@@ -106,13 +106,11 @@ export default function NewClientModal({
     setNome('');
     setTelefone('');
     setHasFirstOrder(false);
-    setQuantities({
-      '500G PURO': 0,
-      '250G PURO': 0,
-      'ALHO TEMPERADO': 0,
-      'TEMPERO COMPLETO': 0,
-      'TEMPERO DE BACON': 0
+    const resetQty = {} as Record<ProductType, number>;
+    PRODUCTS.forEach(p => {
+      resetQty[p] = 0;
     });
+    setQuantities(resetQty);
     setFirstOrderDate(CURRENT_DATE_STR);
     onClose();
   };

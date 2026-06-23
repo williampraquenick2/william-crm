@@ -358,13 +358,10 @@ const EMPTY_PHONES: string[] = [
 
 // Helper to expand compact data into structured Client record
 function expandClient(tel: string, name: string, date?: string, pedidosStr?: string): Client {
-  const totaisPorProduto: Record<ProductType, number> = {
-    '500G PURO': 0,
-    '250G PURO': 0,
-    'ALHO TEMPERADO': 0,
-    'TEMPERO COMPLETO': 0,
-    'TEMPERO DE BACON': 0
-  };
+  const totaisPorProduto: Record<ProductType, number> = {} as any;
+  PRODUCTS.forEach(p => {
+    totaisPorProduto[p] = 0;
+  });
 
   const historico = [];
   if (pedidosStr) {
