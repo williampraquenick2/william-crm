@@ -246,7 +246,21 @@ const ACTIVE_CLIENTS: CompactActive[] = [
   { t: "5511940483099", n: "bruna jdsp", d: "2026-06-16", p: "500G PURO:2" },
   { t: "5511980512136", n: "margareth bom. Clima", d: "2026-06-16", p: "500G PURO:1" },
   { t: "5511951484596", n: "paloma macedo", d: "2026-06-16", p: "500G PURO:1" },
-  { t: "5511945834829", n: "isabela bv", d: "2026-06-16", p: "500G PURO:1" }
+  { t: "5511945834829", n: "isabela bv", d: "2026-06-16", p: "500G PURO:1" },
+  { t: "5511967857455", n: "Gislaine continental", d: "2026-06-23", p: "500G PURO:1" },
+  { t: "5511953985229", n: "tabata cont", d: "2026-06-23", p: "500G PURO:2" },
+  { t: "5511946330960", n: "Alessandra ala yaya", d: "2026-06-23", p: "500G PURO:2" },
+  { t: "5511991822927", n: "ana grafica pallas", d: "2026-06-23", p: "250G PURO:3,TEMPERO COMPLETO:3" },
+  { t: "5511953356712", n: "jack amiga", d: "2026-06-23", p: "TEMPERO DE BACON:1" },
+  { t: "5511942340493", n: "Alana pinhal", d: "2026-06-23", p: "250G PURO:1,TEMPERO COMPLETO:1" },
+  { t: "5511970113610", n: "cleide av guarulhos", d: "2026-06-23", p: "250G PURO:1" },
+  { t: "5511999055543", n: "cleide ponte grande", d: "2026-06-23", p: "500G PURO:1,250G PURO:2" },
+  { t: "5511913067897", n: "tati santa ines", d: "2026-06-23", p: "500G PURO:1" },
+  { t: "5511996480259", n: "maraisa macedo", d: "2026-06-23", p: "500G PURO:1" },
+  { t: "5511992125252", n: "Vera gopouva", d: "2026-06-23", p: "500G PURO:1" },
+  { t: "5511998977080", n: "Jessica vila rosalia", d: "2026-06-23", p: "500G PURO:1,250G PURO:1,TEMPERO DE BACON:1" },
+  { t: "5511965674117", n: "Joyce vl florida", d: "2026-06-23", p: "500G PURO:1" },
+  { t: "5511938022034", n: "Elisangela sta mena", d: "2026-06-23", p: "500G PURO:3" }
 ];
 
 // Prospect clients waiting to be registered (no orders or names listed previously)
