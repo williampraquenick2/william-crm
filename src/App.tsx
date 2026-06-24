@@ -42,6 +42,7 @@ import {
   UserPlus2,
   Search,
   Download,
+  Upload,
   Pencil,
   FileText
 } from 'lucide-react';
@@ -89,6 +90,10 @@ export default function App() {
   // Renaming client states
   const [renamingTelefone, setRenamingTelefone] = useState<string | null>(null);
   const [newNameValue, setNewNameValue] = useState<string>('');
+
+  // Editing last purchase date states
+  const [editingDateTelefone, setEditingDateTelefone] = useState<string | null>(null);
+  const [newDateValue, setNewDateValue] = useState<string>('');
 
   // Stats toast alert state
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -284,6 +289,96 @@ export default function App() {
 
     saveToStorage(updated);
     showToast(`Nome do cliente atualizado com sucesso!`);
+  };
+
+  /**
+   * Atualiza a data da última compra de um cliente
+   */
+  const handleUpdateClientLastPurchaseDate = (telefone: string, newDate: string) => {
+    if (!newDate) return;
+    const updated = clients.map(client => {
+      if (client.telefone === telefone) {
+        let updatedHistory = [...client.historico];
+        
+        if (updatedHistory.length > 0) {
+          // Se houver pedidos, atualiza a data do pedido mais recente
+          updatedHistory[0] = {
+            ...updatedHistory[0],
+            data: newDate
+          };
+          
+          // Reordena o histórico por data decrescente
+          updatedHistory.sort((a, b) => new Date(b.data).getTime() - new Date(a.data).getTime());
+          
+          const metrics = recalculateClientMetrics(updatedHistory);
+          return {
+            ...client,
+            historico: updatedHistory,
+            ...metrics
+          };
+        } else {
+          // Sem histórico, atualiza o campo diretamente
+          return {
+            ...client,
+            ultimaCompra: newDate
+          };
+        }
+      }
+      return client;
+    });
+
+    saveToStorage(updated);
+    showToast("Data da última compra atualizada com sucesso!");
+  };
+
+  /**
+   * Exporta os dados completos da unidade ativa como JSON
+   */
+  const handleExportBackupJSON = () => {
+    if (clients.length === 0) {
+      showToast("Não há dados para exportar.");
+      return;
+    }
+    const unitName = activeUnit === 'SP' ? 'SP' : 'Guarulhos';
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(clients, null, 2));
+    const downloadAnchor = document.createElement('a');
+    downloadAnchor.setAttribute("href", dataStr);
+    downloadAnchor.setAttribute("download", `backup_crm_alho_e_so_${unitName}_${new Date().toISOString().slice(0, 10)}.json`);
+    document.body.appendChild(downloadAnchor);
+    downloadAnchor.click();
+    downloadAnchor.remove();
+    showToast("Backup exportado com sucesso!");
+  };
+
+  /**
+   * Importa e restaura os dados completos a partir de um arquivo JSON
+   */
+  const handleImportBackupJSON = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const fileReader = new FileReader();
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    fileReader.onload = e => {
+      try {
+        const parsedData = JSON.parse(e.target?.result as string);
+        if (Array.isArray(parsedData)) {
+          // Validação rápida de formato
+          const isValid = parsedData.every(c => c && typeof c.telefone === 'string');
+          if (isValid) {
+            saveToStorage(parsedData);
+            setSelectedClient(null);
+            showToast("Backup restaurado com sucesso!");
+          } else {
+            alert("Formato de arquivo inválido. O arquivo de backup não contém telefones de clientes válidos.");
+          }
+        } else {
+          alert("Formato de arquivo inválido. Deve ser uma lista de clientes.");
+        }
+      } catch (err) {
+        alert("Erro ao ler o arquivo de backup. Certifique-se de que é um arquivo JSON válido.");
+      }
+    };
+    fileReader.readAsText(file, "UTF-8");
   };
 
   /**
@@ -747,6 +842,47 @@ export default function App() {
                           <p className="text-[10px] text-slate-500 font-mono mt-0.5">Foco em reengajamento (+60 dias)</p>
                         </div>
                       </button>
+
+                      <div className="border-t border-slate-100 my-2 pt-2">
+                        <span className="text-[9px] font-black tracking-wider uppercase text-slate-400 font-mono block px-2.5 pb-2">
+                          Backup Completo do CRM (JSON)
+                        </span>
+                        
+                        <button
+                          onClick={() => {
+                            handleExportBackupJSON();
+                            setIsDownloadMenuOpen(false);
+                          }}
+                          className="w-full text-left px-2.5 py-2 hover:bg-emerald-50/50 rounded-xl transition-colors flex items-start gap-2.5 group"
+                        >
+                          <div className="p-1.5 bg-emerald-50 text-emerald-600 rounded-lg group-hover:bg-emerald-100 transition-colors mt-0.5">
+                            <Download size={14} />
+                          </div>
+                          <div>
+                            <p className="text-xs font-bold text-slate-900 leading-tight">Exportar Backup JSON</p>
+                            <p className="text-[10px] text-slate-500 font-mono mt-0.5">Salva todos os dados em arquivo</p>
+                          </div>
+                        </button>
+
+                        <label className="w-full text-left px-2.5 py-2 hover:bg-indigo-50/50 rounded-xl transition-colors flex items-start gap-2.5 group cursor-pointer block">
+                          <div className="p-1.5 bg-indigo-50 text-indigo-600 rounded-lg group-hover:bg-indigo-100 transition-colors mt-0.5">
+                            <Upload size={14} />
+                          </div>
+                          <div>
+                            <p className="text-xs font-bold text-slate-900 leading-tight">Importar Backup JSON</p>
+                            <p className="text-[10px] text-slate-500 font-mono mt-0.5 font-bold text-amber-600">Restaurar do seu outro link/aba</p>
+                            <input
+                              type="file"
+                              accept=".json"
+                              onChange={(e) => {
+                                handleImportBackupJSON(e);
+                                setIsDownloadMenuOpen(false);
+                              }}
+                              className="hidden"
+                            />
+                          </div>
+                        </label>
+                      </div>
                     </div>
                   </div>
                 </>
@@ -1017,9 +1153,58 @@ export default function App() {
                                 </div>
                               </td>
                               <td className="py-3.5 pr-1 font-mono text-xs">
-                                {client.ultimaCompra ? (
-                                  <div className="flex flex-col">
-                                    <span className="font-bold text-slate-700">{formatDateBR(client.ultimaCompra)}</span>
+                                {editingDateTelefone === client.telefone ? (
+                                  <div className="flex items-center gap-1.5 py-1" onClick={(e) => e.stopPropagation()}>
+                                    <input 
+                                      type="date"
+                                      value={newDateValue}
+                                      onChange={(e) => setNewDateValue(e.target.value)}
+                                      className="bg-white border-2 border-amber-500 text-xs px-2 py-1 rounded font-bold text-slate-800 focus:outline-none focus:ring-1 focus:ring-amber-500 w-full max-w-[130px]"
+                                      autoFocus
+                                      onKeyDown={(e) => {
+                                        if (e.key === 'Enter') {
+                                          handleUpdateClientLastPurchaseDate(client.telefone, newDateValue);
+                                          setEditingDateTelefone(null);
+                                        } else if (e.key === 'Escape') {
+                                          setEditingDateTelefone(null);
+                                        }
+                                      }}
+                                    />
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        handleUpdateClientLastPurchaseDate(client.telefone, newDateValue);
+                                        setEditingDateTelefone(null);
+                                      }}
+                                      className="bg-emerald-500 hover:bg-emerald-600 text-white font-extrabold text-[10px] px-2 py-1 rounded shrink-0"
+                                    >
+                                      OK
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => setEditingDateTelefone(null)}
+                                      className="bg-slate-300 hover:bg-slate-400 text-slate-700 font-extrabold text-[10px] px-2 py-1 rounded shrink-0"
+                                    >
+                                      X
+                                    </button>
+                                  </div>
+                                ) : client.ultimaCompra ? (
+                                  <div className="flex flex-col group/date">
+                                    <span className="font-bold text-slate-700 flex items-center gap-1.5">
+                                      {formatDateBR(client.ultimaCompra)}
+                                      <button
+                                        type="button"
+                                        title="Alterar Data da Última Compra"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setEditingDateTelefone(client.telefone);
+                                          setNewDateValue(client.ultimaCompra || CURRENT_DATE_STR);
+                                        }}
+                                        className="opacity-0 group-hover/date:opacity-100 p-1 rounded text-slate-400 hover:text-amber-600 hover:bg-slate-100 transition-all flex items-center justify-center shrink-0"
+                                      >
+                                        <Pencil size={11} />
+                                      </button>
+                                    </span>
                                     {inDays > 90 ? (
                                       <span className="text-[9px] text-rose-500 font-bold bg-rose-50 border border-rose-100 self-start px-1.5 py-0.2 rounded mt-0.5 uppercase tracking-wide">Inativo +90d ({inDays} dias)</span>
                                     ) : inDays > 60 ? (
@@ -1029,7 +1214,21 @@ export default function App() {
                                     )}
                                   </div>
                                 ) : (
-                                  <span className="text-slate-400 italic">Sem registros</span>
+                                  <span className="text-slate-400 italic flex items-center gap-1 group/date">
+                                    Sem registros
+                                    <button
+                                      type="button"
+                                      title="Definir Data da Última Compra"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setEditingDateTelefone(client.telefone);
+                                        setNewDateValue(CURRENT_DATE_STR);
+                                      }}
+                                      className="opacity-0 group-hover/date:opacity-100 p-1 rounded text-slate-400 hover:text-amber-600 hover:bg-slate-100 transition-all flex items-center justify-center shrink-0"
+                                    >
+                                      <Pencil size={11} />
+                                    </button>
+                                  </span>
                                 )}
                               </td>
                               <td className="py-3.5 text-right">
@@ -1165,6 +1364,62 @@ export default function App() {
                         <span className="text-slate-500">Tel:</span>
                         {formatPhoneNumber(selectedClient.telefone)}
                       </p>
+                      {editingDateTelefone === selectedClient.telefone ? (
+                        <div className="flex items-center gap-1.5 mt-2" onClick={(e) => e.stopPropagation()}>
+                          <span className="text-xs text-slate-500 font-mono">Última compra:</span>
+                          <input 
+                            type="date"
+                            value={newDateValue}
+                            onChange={(e) => setNewDateValue(e.target.value)}
+                            className="bg-slate-800 border-2 border-amber-500 text-xs px-2 py-1 rounded font-bold text-white focus:outline-none focus:ring-1 focus:ring-amber-500 w-full max-w-[140px]"
+                            autoFocus
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                handleUpdateClientLastPurchaseDate(selectedClient.telefone, newDateValue);
+                                setEditingDateTelefone(null);
+                              } else if (e.key === 'Escape') {
+                                setEditingDateTelefone(null);
+                              }
+                            }}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              handleUpdateClientLastPurchaseDate(selectedClient.telefone, newDateValue);
+                              setEditingDateTelefone(null);
+                            }}
+                            className="bg-emerald-500 hover:bg-emerald-600 text-white font-extrabold text-[10px] px-2 py-1 rounded transition-all shrink-0"
+                          >
+                            OK
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setEditingDateTelefone(null)}
+                            className="bg-slate-700 hover:bg-slate-600 text-slate-300 font-extrabold text-[10px] px-2 py-1 rounded transition-all shrink-0"
+                          >
+                            X
+                          </button>
+                        </div>
+                      ) : (
+                        <p className="text-xs text-slate-400 font-mono mt-1 flex items-center gap-1.5 group/sidebar-date">
+                          <span className="text-slate-500">Última Compra:</span>
+                          <span className="text-amber-400 font-bold">
+                            {selectedClient.ultimaCompra ? formatDateBR(selectedClient.ultimaCompra) : 'Nenhuma'}
+                          </span>
+                          <button
+                            type="button"
+                            title="Alterar Última Compra"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setEditingDateTelefone(selectedClient.telefone);
+                              setNewDateValue(selectedClient.ultimaCompra || CURRENT_DATE_STR);
+                            }}
+                            className="opacity-40 group-hover/sidebar-date:opacity-100 p-0.5 rounded text-slate-400 hover:text-amber-500 hover:bg-slate-800 transition-all flex items-center justify-center shrink-0"
+                          >
+                            <Pencil size={11} />
+                          </button>
+                        </p>
+                      )}
                     </div>
 
                     {/* Quick Core Metrics Summary */}
