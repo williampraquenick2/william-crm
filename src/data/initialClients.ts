@@ -672,9 +672,12 @@ export function seedClientHistory(telefone: string, nome: string, index: number)
   const totalPedidos = historico.length;
   const totalProdutosComprados = Object.values(totaisPorProduto).reduce((a, b) => a + b, 0);
 
+  const isSabado = nome.toLowerCase().includes('sabado') || nome.toLowerCase().includes('sábado');
+
   return {
     telefone,
     nome: nome === "SEM NOME" ? `SEM NOME (${telefone})` : nome,
+    clienteSabado: isSabado,
     historico,
     ultimaCompra,
     totaisPorProduto,

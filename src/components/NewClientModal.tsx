@@ -15,6 +15,7 @@ interface NewClientModalProps {
   onSaveClient: (clientData: { 
     nome: string; 
     telefone: string; 
+    clienteSabado?: boolean;
     primeiroPedido?: { data: string; itens: { produto: ProductType; quantidade: number }[] } 
   }) => void;
 }
@@ -27,6 +28,7 @@ export default function NewClientModal({
 }: NewClientModalProps) {
   const [nome, setNome] = useState('');
   const [telefone, setTelefone] = useState('');
+  const [isSabado, setIsSabado] = useState(false);
   const [hasFirstOrder, setHasFirstOrder] = useState(false);
   const [firstOrderDate, setFirstOrderDate] = useState(CURRENT_DATE_STR);
   
@@ -99,12 +101,14 @@ export default function NewClientModal({
     onSaveClient({
       nome: nome.trim(),
       telefone: cleanPhone,
+      clienteSabado: isSabado,
       primeiroPedido: firstOrder
     });
 
     // Reset fields
     setNome('');
     setTelefone('');
+    setIsSabado(false);
     setHasFirstOrder(false);
     const resetQty = {} as Record<ProductType, number>;
     PRODUCTS.forEach(p => {
@@ -175,11 +179,42 @@ export default function NewClientModal({
                 type="text"
                 required
                 value={nome}
-                onChange={(e) => setNome(e.target.value)}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setNome(val);
+                  if (val.toLowerCase().includes('sabado') || val.toLowerCase().includes('sábado')) {
+                    setIsSabado(true);
+                  }
+                }}
                 placeholder="Ex: João da Silva"
                 className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all font-medium text-slate-800"
               />
             </div>
+          </div>
+
+          {/* Saturday Client Checkbox */}
+          <div className="bg-amber-50/80 border border-amber-200/80 rounded-xl p-3 flex items-center justify-between">
+            <label className="inline-flex items-center gap-3 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={isSabado}
+                onChange={(e) => setIsSabado(e.target.checked)}
+                className="h-4 w-4 text-amber-600 focus:ring-amber-500 border-slate-300 rounded cursor-pointer accent-amber-600"
+              />
+              <div>
+                <span className="text-xs font-bold text-slate-800 font-mono uppercase tracking-wider block">
+                  É cliente de sábado?
+                </span>
+                <span className="text-[10px] text-slate-500 block">
+                  Marque para incluir no filtro e exportação de contatos de sábado
+                </span>
+              </div>
+            </label>
+            {isSabado && (
+              <span className="bg-amber-500 text-slate-950 font-black text-[10px] px-2 py-0.5 rounded font-mono uppercase shrink-0">
+                🗓️ SÁBADO
+              </span>
+            )}
           </div>
 
           {/* Checkbox to add first order immediately */}

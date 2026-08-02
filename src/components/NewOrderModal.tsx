@@ -13,7 +13,7 @@ interface NewOrderModalProps {
   onClose: () => void;
   clients: Client[];
   initialSelectedClient?: Client | null;
-  onSaveOrder: (telefone: string, date: string, items: { produto: ProductType; quantidade: number }[]) => void;
+  onSaveOrder: (telefone: string, date: string, items: { produto: ProductType; quantidade: number }[], isSabado?: boolean) => void;
   onUpdateClientName?: (telefone: string, newNome: string) => void;
 }
 
@@ -28,6 +28,7 @@ export default function NewOrderModal({
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [orderDate, setOrderDate] = useState(CURRENT_DATE_STR);
+  const [isSabado, setIsSabado] = useState(false);
   
   // Quantities for each of the products
   const [quantities, setQuantities] = useState<Record<ProductType, number>>(() => {
@@ -51,9 +52,11 @@ export default function NewOrderModal({
     if (initialSelectedClient) {
       setSelectedClient(initialSelectedClient);
       setSearchQuery(initialSelectedClient.nome);
+      setIsSabado(!!initialSelectedClient.clienteSabado);
     } else {
       setSelectedClient(null);
       setSearchQuery('');
+      setIsSabado(false);
     }
   }, [initialSelectedClient, isOpen]);
 
@@ -81,6 +84,7 @@ export default function NewOrderModal({
       if (fresh) {
         setSelectedClient(fresh);
         setSearchQuery(fresh.nome);
+        setIsSabado(!!fresh.clienteSabado);
       }
     }
   }, [clients]);
@@ -90,6 +94,7 @@ export default function NewOrderModal({
   const handleSelectClient = (client: Client) => {
     setSelectedClient(client);
     setSearchQuery(client.nome);
+    setIsSabado(!!client.clienteSabado);
     setShowSearchDropdown(false);
     setValidationError(null);
   };
@@ -135,7 +140,7 @@ export default function NewOrderModal({
       return;
     }
 
-    onSaveOrder(selectedClient.telefone, orderDate, itemsToSave);
+    onSaveOrder(selectedClient.telefone, orderDate, itemsToSave, isSabado);
     
     // Reset quantities and states
     const resetQty = {} as Record<ProductType, number>;
@@ -146,6 +151,7 @@ export default function NewOrderModal({
     setSelectedClient(null);
     setSearchQuery('');
     setOrderDate(CURRENT_DATE_STR);
+    setIsSabado(false);
     onClose();
   };
 
@@ -317,6 +323,31 @@ export default function NewOrderModal({
                 className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 transition-all font-medium text-slate-800 font-mono"
               />
             </div>
+          </div>
+
+          {/* Saturday Client Checkbox / Tiquezinho Auxiliar */}
+          <div className="bg-amber-50/80 border border-amber-200/80 rounded-xl p-3.5 flex items-center justify-between shadow-xs">
+            <label className="inline-flex items-center gap-3 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={isSabado}
+                onChange={(e) => setIsSabado(e.target.checked)}
+                className="h-4 w-4 text-amber-600 focus:ring-amber-500 border-slate-300 rounded cursor-pointer accent-amber-600"
+              />
+              <div>
+                <span className="text-xs font-bold text-slate-800 font-mono uppercase tracking-wider block">
+                  É cliente de sábado?
+                </span>
+                <span className="text-[10px] text-slate-500 block">
+                  Marque este tiquezinho para separar contatos ao puxar telefones
+                </span>
+              </div>
+            </label>
+            {isSabado && (
+              <span className="bg-amber-500 text-slate-950 font-black text-[10px] px-2 py-0.5 rounded font-mono uppercase shadow-xs shrink-0">
+                🗓️ SÁBADO
+              </span>
+            )}
           </div>
 
           {/* Garlic Products Counters List */}

@@ -44,6 +44,7 @@ export interface PurchaseOrder {
 export interface Client {
   telefone: string;
   nome: string; // Se do excel estiver "SEM NOME", usaremos "SEM NOME" ou o que vier de lá.
+  clienteSabado?: boolean; // Tiquezinho/tag para identificar clientes de sábado
   historico: PurchaseOrder[];
   ultimaCompra: string | null; // YYYY-MM-DD
   totaisPorProduto: Record<ProductType, number>;

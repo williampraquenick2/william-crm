@@ -407,9 +407,12 @@ function expandClient(tel: string, name: string, date?: string, pedidosStr?: str
   const totalPedidos = historico.length;
   const totalProdutosComprados = Object.values(totaisPorProduto).reduce((a, b) => a + b, 0);
 
+  const isSabado = name.toLowerCase().includes('sabado') || name.toLowerCase().includes('sábado');
+
   return {
     telefone: tel,
     nome: name === "SEM NOME" ? `SEM NOME (${tel})` : name,
+    clienteSabado: isSabado,
     historico,
     ultimaCompra,
     totaisPorProduto,

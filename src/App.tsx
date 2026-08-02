@@ -196,7 +196,12 @@ export default function App() {
   /**
    * Registra um novo pedido para um cliente existente e atualiza os totais cumulativos
    */
-  const handleSaveOrder = (telefone: string, date: string, items: { produto: ProductType; quantidade: number }[]) => {
+  const handleSaveOrder = (
+    telefone: string, 
+    date: string, 
+    items: { produto: ProductType; quantidade: number }[],
+    isSabado?: boolean
+  ) => {
     const updated = clients.map(client => {
       if (client.telefone === telefone) {
         // Create unique sub-ID
@@ -215,6 +220,7 @@ export default function App() {
 
         return {
           ...client,
+          clienteSabado: isSabado !== undefined ? isSabado : client.clienteSabado,
           historico: updatedHistory.sort((a,b) => new Date(b.data).getTime() - new Date(a.data).getTime()),
           ...metrics
         };
@@ -231,12 +237,34 @@ export default function App() {
   };
 
   /**
+   * Alterna ou define a tag/tiquezinho de "Cliente de Sábado"
+   */
+  const handleToggleClientSabado = (telefone: string, explicitValue?: boolean) => {
+    const updated = clients.map(client => {
+      if (client.telefone === telefone) {
+        const nextVal = explicitValue !== undefined ? explicitValue : !client.clienteSabado;
+        return {
+          ...client,
+          clienteSabado: nextVal
+        };
+      }
+      return client;
+    });
+
+    saveToStorage(updated);
+    const target = clients.find(c => c.telefone === telefone);
+    const isNowSabado = explicitValue !== undefined ? explicitValue : !target?.clienteSabado;
+    showToast(isNowSabado ? `Cliente marcado como Cliente de Sábado!` : `Cliente desmarcado de Cliente de Sábado.`);
+  };
+
+  /**
    * Cadastra um novo cliente no banco de dados.
    * Se o telefone já existir, o validador de formulário impedirá, mas fazemos dupla checagem.
    */
   const handleSaveClient = (clientData: { 
     nome: string; 
     telefone: string; 
+    clienteSabado?: boolean;
     primeiroPedido?: { data: string; itens: { produto: ProductType; quantidade: number }[] } 
   }) => {
     const exists = clients.some(c => c.telefone === clientData.telefone);
@@ -259,6 +287,7 @@ export default function App() {
     const newClient: Client = {
       telefone: clientData.telefone,
       nome: clientData.nome,
+      clienteSabado: !!clientData.clienteSabado,
       historico: firstOrderList,
       ...metrics
     };
@@ -431,7 +460,7 @@ export default function App() {
   /**
    * Baixa a lista completa de clientes e telefones formatada em .txt (filtrada ou geral)
    */
-  const handleDownloadClientsTXT = (filterType: 'todos' | '40' | '50' | '60') => {
+  const handleDownloadClientsTXT = (filterType: 'todos' | 'sabado-apenas' | 'sabado-exceto' | '40' | '50' | '60') => {
     if (clients.length === 0) {
       showToast("Não há clientes cadastrados para exportar.");
       return;
@@ -441,7 +470,15 @@ export default function App() {
     let filename = 'clientes_alho_e_so.txt';
     let label = 'Todos os Contatos';
 
-    if (filterType === '40') {
+    if (filterType === 'sabado-apenas') {
+      filteredList = clients.filter(c => c.clienteSabado);
+      filename = 'clientes_alho_e_so_sabado.txt';
+      label = 'Apenas Clientes de Sábado';
+    } else if (filterType === 'sabado-exceto') {
+      filteredList = clients.filter(c => !c.clienteSabado);
+      filename = 'clientes_alho_e_so_exceto_sabado.txt';
+      label = 'Clientes exceto Sábado';
+    } else if (filterType === '40') {
       // Clientes sem compras nos últimos 40 dias ou nunca compraram (0 totalPedidos)
       filteredList = clients.filter(c => c.totalPedidos === 0 || (c.ultimaCompra && getDaysSince(c.ultimaCompra) > 40));
       filename = 'clientes_alho_e_so_inativos_40_dias.txt';
@@ -466,7 +503,7 @@ export default function App() {
     const sortedList = [...filteredList].sort((a, b) => a.nome.localeCompare(b.nome));
 
     const txtContent = sortedList
-      .map(c => `${c.telefone} - ${c.nome}`)
+      .map(c => `${c.telefone} - ${c.nome}${c.clienteSabado ? ' (SÁBADO)' : ''}`)
       .join('\n');
 
     const blob = new Blob([txtContent], { type: 'text/plain;charset=utf-8' });
@@ -480,6 +517,30 @@ export default function App() {
     URL.revokeObjectURL(url);
 
     showToast(`Baixando ${filteredList.length} contatos (${label})!`);
+  };
+
+  /**
+   * Copia rapidamente os números de telefone para a área de transferência
+   */
+  const handleCopyPhones = (filterType: 'todos' | 'sabado-apenas' | 'sabado-exceto') => {
+    let list = [...clients];
+    let label = 'todos os contatos';
+    if (filterType === 'sabado-apenas') {
+      list = list.filter(c => c.clienteSabado);
+      label = 'clientes de sábado';
+    } else if (filterType === 'sabado-exceto') {
+      list = list.filter(c => !c.clienteSabado);
+      label = 'clientes sem sábado';
+    }
+
+    if (list.length === 0) {
+      showToast(`Nenhum telefone encontrado para: ${label}`);
+      return;
+    }
+
+    const phones = list.map(c => `${c.telefone} - ${c.nome}`).join('\n');
+    navigator.clipboard.writeText(phones);
+    showToast(`📋 ${list.length} telefones (${label}) copiados para a área de transferência!`);
   };
 
   // --------------------------------------------------------
@@ -561,7 +622,13 @@ export default function App() {
     }
 
     // 2. Segment classification
-    if (selectedSegment === 'sem-nome') {
+    if (selectedSegment === 'sabado') {
+      list = list.filter(c => c.clienteSabado);
+    }
+    else if (selectedSegment === 'sabado-exceto') {
+      list = list.filter(c => !c.clienteSabado);
+    }
+    else if (selectedSegment === 'sem-nome') {
       list = list.filter(c => c.nome.startsWith('SEM NOME'));
     } 
     else if (selectedSegment === 'inativos-30') {
@@ -790,10 +857,76 @@ export default function App() {
                           <Users size={14} />
                         </div>
                         <div>
-                          <p className="text-xs font-bold text-slate-900 leading-tight">Todos os Contatos</p>
+                          <p className="text-xs font-bold text-slate-900 leading-tight">Todos os Contatos (.TXT)</p>
                           <p className="text-[10px] text-slate-500 font-mono mt-0.5">Sem filtros ({clients.length} contatos)</p>
                         </div>
                       </button>
+
+                      {/* Saturday Client Export Options */}
+                      <button
+                        onClick={() => {
+                          handleDownloadClientsTXT('sabado-apenas');
+                          setIsDownloadMenuOpen(false);
+                        }}
+                        className="w-full text-left px-2.5 py-2 hover:bg-amber-50 rounded-xl transition-colors flex items-start gap-2.5 group bg-amber-50/40"
+                      >
+                        <div className="p-1.5 bg-amber-100 text-amber-800 rounded-lg group-hover:bg-amber-200 transition-colors mt-0.5">
+                          <Calendar size={14} />
+                        </div>
+                        <div>
+                          <p className="text-xs font-black text-amber-950 leading-tight flex items-center gap-1">
+                            🗓️ Apenas Clientes de Sábado (.TXT)
+                          </p>
+                          <p className="text-[10px] text-amber-700/80 font-mono mt-0.5">
+                            {clients.filter(c => c.clienteSabado).length} clientes marcados
+                          </p>
+                        </div>
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          handleDownloadClientsTXT('sabado-exceto');
+                          setIsDownloadMenuOpen(false);
+                        }}
+                        className="w-full text-left px-2.5 py-2 hover:bg-slate-50 rounded-xl transition-colors flex items-start gap-2.5 group"
+                      >
+                        <div className="p-1.5 bg-slate-100 text-slate-700 rounded-lg group-hover:bg-slate-200 transition-colors mt-0.5">
+                          <Users size={14} />
+                        </div>
+                        <div>
+                          <p className="text-xs font-bold text-slate-900 leading-tight">Clientes EXCETO Sábado (.TXT)</p>
+                          <p className="text-[10px] text-slate-500 font-mono mt-0.5">
+                            {clients.filter(c => !c.clienteSabado).length} outros contatos
+                          </p>
+                        </div>
+                      </button>
+
+                      {/* Quick Copy Phone Numbers Section */}
+                      <div className="border-t border-slate-100 my-1 pt-1.5 pb-0.5">
+                        <span className="text-[9px] font-black tracking-wider uppercase text-slate-400 font-mono block px-2.5 pb-1">
+                          Copiar Telefones
+                        </span>
+                        <div className="grid grid-cols-2 gap-1 px-1">
+                          <button
+                            onClick={() => {
+                              handleCopyPhones('sabado-apenas');
+                              setIsDownloadMenuOpen(false);
+                            }}
+                            className="text-[10px] font-mono font-bold py-1.5 px-2 bg-amber-100 hover:bg-amber-200 text-amber-950 rounded-lg border border-amber-300/60 transition-all text-center"
+                          >
+                            📋 Copiar Sábado
+                          </button>
+                          <button
+                            onClick={() => {
+                              handleCopyPhones('sabado-exceto');
+                              setIsDownloadMenuOpen(false);
+                            }}
+                            className="text-[10px] font-mono font-bold py-1.5 px-2 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-lg border border-slate-200 transition-all text-center"
+                          >
+                            📋 Copiar Outros
+                          </button>
+                        </div>
+                      </div>
 
                       <button
                         onClick={() => {
@@ -1017,12 +1150,14 @@ export default function App() {
                   <div className="flex flex-wrap gap-1.5">
                     {[
                       { id: 'todos', label: 'Todos' },
+                      { id: 'sabado', label: '🗓️ Clientes de Sábado' },
+                      { id: 'sabado-exceto', label: 'Outros Dias (Sem Sábado)' },
                       { id: 'sem-nome', label: 'Sem Nome' },
-                      { id: 'inativos-30', label: 'Inativos +30 dias' },
-                      { id: 'inativos-60', label: 'Inativos +60 dias' },
-                      { id: 'inativos-90', label: 'Inativos +90 dias' },
-                      { id: 'uma-compra', label: 'Apenas 1 Compra' },
-                      { id: 'top-20', label: 'Top 20 Volumes' }
+                      { id: 'inativos-30', label: 'Inativos +30d' },
+                      { id: 'inativos-60', label: 'Inativos +60d' },
+                      { id: 'inativos-90', label: 'Inativos +90d' },
+                      { id: 'uma-compra', label: '1 Compra' },
+                      { id: 'top-20', label: 'Top 20' }
                     ].map((seg) => (
                       <button
                         key={seg.id}
@@ -1126,6 +1261,31 @@ export default function App() {
                                       {client.nome}
                                       {client.nome.startsWith('SEM NOME') && (
                                         <span className="bg-slate-100 text-slate-500 text-[9px] px-1.5 py-0.2 rounded font-mono">S/N</span>
+                                      )}
+                                      {client.clienteSabado ? (
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleToggleClientSabado(client.telefone);
+                                          }}
+                                          title="Clique para remover a tag de Cliente de Sábado"
+                                          className="bg-amber-100 hover:bg-amber-200 text-amber-900 text-[9px] font-black font-mono px-1.5 py-0.5 rounded border border-amber-300 transition-all shrink-0 flex items-center gap-0.5"
+                                        >
+                                          🗓️ SÁBADO
+                                        </button>
+                                      ) : (
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleToggleClientSabado(client.telefone);
+                                          }}
+                                          title="Clique para marcar como Cliente de Sábado"
+                                          className="opacity-0 group-hover:opacity-100 bg-slate-100 hover:bg-amber-100 text-slate-500 hover:text-amber-800 text-[9px] font-mono font-bold px-1.5 py-0.5 rounded border border-slate-200 hover:border-amber-300 transition-all shrink-0"
+                                        >
+                                          + Sábado
+                                        </button>
                                       )}
                                       <button
                                         type="button"
@@ -1420,6 +1580,31 @@ export default function App() {
                           </button>
                         </p>
                       )}
+
+                      {/* Saturday Client Status Toggle */}
+                      <div className="mt-3 pt-2.5 border-t border-slate-800 flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-mono font-medium text-slate-400">Cliente de Sábado:</span>
+                          {selectedClient.clienteSabado ? (
+                            <span className="bg-amber-500 text-slate-950 font-black text-[10px] px-2 py-0.5 rounded font-mono uppercase shadow-xs">
+                              🗓️ SÁBADO
+                            </span>
+                          ) : (
+                            <span className="text-xs font-mono text-slate-500">Não</span>
+                          )}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleToggleClientSabado(selectedClient.telefone)}
+                          className={`text-[10px] font-bold font-mono px-2.5 py-1 rounded-lg transition-all ${
+                            selectedClient.clienteSabado
+                              ? 'bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/30'
+                              : 'bg-amber-500 hover:bg-amber-600 text-slate-950 font-black shadow-xs'
+                          }`}
+                        >
+                          {selectedClient.clienteSabado ? 'Remover Tag' : '+ Marcar Sábado'}
+                        </button>
+                      </div>
                     </div>
 
                     {/* Quick Core Metrics Summary */}
