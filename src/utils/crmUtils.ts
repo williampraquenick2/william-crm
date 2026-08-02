@@ -5,18 +5,39 @@
 
 import { Client, ProductType, PurchaseOrder, OrderItem, PRODUCTS } from '../types';
 
-// O sistema considera como dia atual: 2026-06-11
-export const CURRENT_DATE_STR = '2026-06-11';
+/**
+ * Retorna a data atual de hoje formatada em YYYY-MM-DD no fuso local do usuário
+ */
+export function getTodayDateString(): string {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+// Data do dia atual dinâmica (calculada em tempo real)
+export const CURRENT_DATE_STR = getTodayDateString();
 
 /**
- * Retorna a diferença de dias entre o dia atual (2026-06-11) e a data especificada
+ * Retorna a diferença de dias entre a data real atual de hoje e a data especificada
  */
 export function getDaysSince(dateStr: string | null): number {
   if (!dateStr) return Infinity; // Se nunca comprou, retorna infinito
   
-  const today = new Date(CURRENT_DATE_STR);
-  const purchaseDate = new Date(dateStr);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const parts = dateStr.split('-');
+  if (parts.length === 3) {
+    const purchaseDate = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+    purchaseDate.setHours(0, 0, 0, 0);
+    const diffTime = today.getTime() - purchaseDate.getTime();
+    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+    return diffDays < 0 ? 0 : diffDays;
+  }
   
+  const purchaseDate = new Date(dateStr);
   if (isNaN(purchaseDate.getTime())) return Infinity;
   
   const diffTime = today.getTime() - purchaseDate.getTime();

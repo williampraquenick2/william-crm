@@ -14,7 +14,8 @@ import {
   recalculateClientMetrics, 
   getProductSalesReport, 
   getPeriodSalesReport,
-  CURRENT_DATE_STR
+  CURRENT_DATE_STR,
+  getTodayDateString
 } from './utils/crmUtils';
 import CommandBox from './components/CommandBox';
 import NewOrderModal from './components/NewOrderModal';
@@ -1572,7 +1573,7 @@ export default function App() {
                             onClick={(e) => {
                               e.stopPropagation();
                               setEditingDateTelefone(selectedClient.telefone);
-                              setNewDateValue(selectedClient.ultimaCompra || CURRENT_DATE_STR);
+                              setNewDateValue(selectedClient.ultimaCompra || getTodayDateString());
                             }}
                             className="opacity-40 group-hover/sidebar-date:opacity-100 p-0.5 rounded text-slate-400 hover:text-amber-500 hover:bg-slate-800 transition-all flex items-center justify-center shrink-0"
                           >

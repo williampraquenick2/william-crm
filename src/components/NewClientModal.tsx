@@ -3,10 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Client, ProductType, PRODUCTS } from '../types';
 import { X, UserPlus, Phone, User, Calendar, Plus, Minus, Check } from 'lucide-react';
-import { CURRENT_DATE_STR } from '../utils/crmUtils';
+import { CURRENT_DATE_STR, getTodayDateString } from '../utils/crmUtils';
 
 interface NewClientModalProps {
   isOpen: boolean;
@@ -30,7 +30,7 @@ export default function NewClientModal({
   const [telefone, setTelefone] = useState('');
   const [isSabado, setIsSabado] = useState(false);
   const [hasFirstOrder, setHasFirstOrder] = useState(false);
-  const [firstOrderDate, setFirstOrderDate] = useState(CURRENT_DATE_STR);
+  const [firstOrderDate, setFirstOrderDate] = useState(getTodayDateString);
   
   // Quantities for first order items
   const [quantities, setQuantities] = useState<Record<ProductType, number>>(() => {
@@ -42,6 +42,13 @@ export default function NewClientModal({
   });
 
   const [validationError, setValidationError] = useState<string | null>(null);
+
+  // Reset first order date to today's real current date whenever modal opens
+  useEffect(() => {
+    if (isOpen) {
+      setFirstOrderDate(getTodayDateString());
+    }
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -115,7 +122,7 @@ export default function NewClientModal({
       resetQty[p] = 0;
     });
     setQuantities(resetQty);
-    setFirstOrderDate(CURRENT_DATE_STR);
+    setFirstOrderDate(getTodayDateString());
     onClose();
   };
 

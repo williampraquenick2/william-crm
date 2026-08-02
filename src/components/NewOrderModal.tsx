@@ -6,7 +6,7 @@
 import React, { useState, useEffect } from 'react';
 import { Client, ProductType, PRODUCTS } from '../types';
 import { X, Search, Plus, Minus, Calendar, ShoppingBag, UserCheck, Pencil } from 'lucide-react';
-import { CURRENT_DATE_STR, formatDateBR } from '../utils/crmUtils';
+import { CURRENT_DATE_STR, getTodayDateString, formatDateBR } from '../utils/crmUtils';
 
 interface NewOrderModalProps {
   isOpen: boolean;
@@ -27,7 +27,7 @@ export default function NewOrderModal({
 }: NewOrderModalProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
-  const [orderDate, setOrderDate] = useState(CURRENT_DATE_STR);
+  const [orderDate, setOrderDate] = useState(getTodayDateString);
   const [isSabado, setIsSabado] = useState(false);
   
   // Quantities for each of the products
@@ -47,8 +47,11 @@ export default function NewOrderModal({
   const [isEditingName, setIsEditingName] = useState(false);
   const [tempName, setTempName] = useState('');
 
-  // Sync initial client selection if provided from parent (e.g. clicking "Novo Pedido" directly on a client record)
+  // Sync initial client selection and reset order date to current today's date whenever modal opens
   useEffect(() => {
+    if (isOpen) {
+      setOrderDate(getTodayDateString());
+    }
     if (initialSelectedClient) {
       setSelectedClient(initialSelectedClient);
       setSearchQuery(initialSelectedClient.nome);
@@ -150,7 +153,7 @@ export default function NewOrderModal({
     setQuantities(resetQty);
     setSelectedClient(null);
     setSearchQuery('');
-    setOrderDate(CURRENT_DATE_STR);
+    setOrderDate(getTodayDateString());
     setIsSabado(false);
     onClose();
   };
