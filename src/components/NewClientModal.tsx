@@ -12,10 +12,12 @@ interface NewClientModalProps {
   isOpen: boolean;
   onClose: () => void;
   clients: Client[];
+  activeUnit?: 'SP' | 'Guarulhos' | null;
   onSaveClient: (clientData: { 
     nome: string; 
     telefone: string; 
     clienteSabado?: boolean;
+    clienteFrancoDaRocha?: boolean;
     primeiroPedido?: { data: string; itens: { produto: ProductType; quantidade: number }[] } 
   }) => void;
 }
@@ -24,13 +26,21 @@ export default function NewClientModal({
   isOpen,
   onClose,
   clients,
+  activeUnit,
   onSaveClient
 }: NewClientModalProps) {
   const [nome, setNome] = useState('');
   const [telefone, setTelefone] = useState('');
-  const [isSabado, setIsSabado] = useState(false);
+  const [isTagChecked, setIsTagChecked] = useState(false);
   const [hasFirstOrder, setHasFirstOrder] = useState(false);
   const [firstOrderDate, setFirstOrderDate] = useState(getTodayDateString);
+
+  const isSP = activeUnit === 'SP';
+  const tagLabel = isSP ? 'É cliente de Franco da Rocha?' : 'É cliente de sábado?';
+  const tagSubtext = isSP 
+    ? 'Marque para incluir no filtro e exportação de contatos de Franco da Rocha' 
+    : 'Marque para incluir no filtro e exportação de contatos de sábado';
+  const tagBadgeText = isSP ? '🏙️ FRANCO DA ROCHA' : '🗓️ SÁBADO';
   
   // Quantities for first order items
   const [quantities, setQuantities] = useState<Record<ProductType, number>>(() => {
@@ -108,14 +118,15 @@ export default function NewClientModal({
     onSaveClient({
       nome: nome.trim(),
       telefone: cleanPhone,
-      clienteSabado: isSabado,
+      clienteSabado: isSP ? false : isTagChecked,
+      clienteFrancoDaRocha: isSP ? isTagChecked : false,
       primeiroPedido: firstOrder
     });
 
     // Reset fields
     setNome('');
     setTelefone('');
-    setIsSabado(false);
+    setIsTagChecked(false);
     setHasFirstOrder(false);
     const resetQty = {} as Record<ProductType, number>;
     PRODUCTS.forEach(p => {
@@ -189,8 +200,15 @@ export default function NewClientModal({
                 onChange={(e) => {
                   const val = e.target.value;
                   setNome(val);
-                  if (val.toLowerCase().includes('sabado') || val.toLowerCase().includes('sábado')) {
-                    setIsSabado(true);
+                  const lower = val.toLowerCase();
+                  if (isSP) {
+                    if (lower.includes('franco') || lower.includes('rocha')) {
+                      setIsTagChecked(true);
+                    }
+                  } else {
+                    if (lower.includes('sabado') || lower.includes('sábado')) {
+                      setIsTagChecked(true);
+                    }
                   }
                 }}
                 placeholder="Ex: João da Silva"
@@ -199,27 +217,27 @@ export default function NewClientModal({
             </div>
           </div>
 
-          {/* Saturday Client Checkbox */}
+          {/* Dynamic Client Checkbox (Franco da Rocha for SP / Sábado for Guarulhos) */}
           <div className="bg-amber-50/80 border border-amber-200/80 rounded-xl p-3 flex items-center justify-between">
             <label className="inline-flex items-center gap-3 cursor-pointer select-none">
               <input
                 type="checkbox"
-                checked={isSabado}
-                onChange={(e) => setIsSabado(e.target.checked)}
+                checked={isTagChecked}
+                onChange={(e) => setIsTagChecked(e.target.checked)}
                 className="h-4 w-4 text-amber-600 focus:ring-amber-500 border-slate-300 rounded cursor-pointer accent-amber-600"
               />
               <div>
                 <span className="text-xs font-bold text-slate-800 font-mono uppercase tracking-wider block">
-                  É cliente de sábado?
+                  {tagLabel}
                 </span>
                 <span className="text-[10px] text-slate-500 block">
-                  Marque para incluir no filtro e exportação de contatos de sábado
+                  {tagSubtext}
                 </span>
               </div>
             </label>
-            {isSabado && (
+            {isTagChecked && (
               <span className="bg-amber-500 text-slate-950 font-black text-[10px] px-2 py-0.5 rounded font-mono uppercase shrink-0">
-                🗓️ SÁBADO
+                {tagBadgeText}
               </span>
             )}
           </div>

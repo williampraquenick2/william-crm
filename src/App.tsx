@@ -201,7 +201,7 @@ export default function App() {
     telefone: string, 
     date: string, 
     items: { produto: ProductType; quantidade: number }[],
-    isSabado?: boolean
+    isTagChecked?: boolean
   ) => {
     const updated = clients.map(client => {
       if (client.telefone === telefone) {
@@ -219,9 +219,11 @@ export default function App() {
         // Use crmUtils helper to completely recalculate totals cumulatively
         const metrics = recalculateClientMetrics(updatedHistory);
 
+        const isSP = activeUnit === 'SP';
         return {
           ...client,
-          clienteSabado: isSabado !== undefined ? isSabado : client.clienteSabado,
+          clienteSabado: !isSP ? (isTagChecked !== undefined ? isTagChecked : client.clienteSabado) : client.clienteSabado,
+          clienteFrancoDaRocha: isSP ? (isTagChecked !== undefined ? isTagChecked : client.clienteFrancoDaRocha) : client.clienteFrancoDaRocha,
           historico: updatedHistory.sort((a,b) => new Date(b.data).getTime() - new Date(a.data).getTime()),
           ...metrics
         };
@@ -238,24 +240,38 @@ export default function App() {
   };
 
   /**
-   * Alterna ou define a tag/tiquezinho de "Cliente de Sábado"
+   * Alterna a tag do cliente (Cliente de Sábado para Guarulhos / Franco da Rocha para SP)
    */
   const handleToggleClientSabado = (telefone: string, explicitValue?: boolean) => {
+    const isSP = activeUnit === 'SP';
     const updated = clients.map(client => {
       if (client.telefone === telefone) {
-        const nextVal = explicitValue !== undefined ? explicitValue : !client.clienteSabado;
-        return {
-          ...client,
-          clienteSabado: nextVal
-        };
+        if (isSP) {
+          const nextVal = explicitValue !== undefined ? explicitValue : !client.clienteFrancoDaRocha;
+          return {
+            ...client,
+            clienteFrancoDaRocha: nextVal
+          };
+        } else {
+          const nextVal = explicitValue !== undefined ? explicitValue : !client.clienteSabado;
+          return {
+            ...client,
+            clienteSabado: nextVal
+          };
+        }
       }
       return client;
     });
 
     saveToStorage(updated);
     const target = clients.find(c => c.telefone === telefone);
-    const isNowSabado = explicitValue !== undefined ? explicitValue : !target?.clienteSabado;
-    showToast(isNowSabado ? `Cliente marcado como Cliente de Sábado!` : `Cliente desmarcado de Cliente de Sábado.`);
+    if (isSP) {
+      const isNowFranco = explicitValue !== undefined ? explicitValue : !target?.clienteFrancoDaRocha;
+      showToast(isNowFranco ? `Cliente marcado como Franco da Rocha!` : `Cliente desmarcado de Franco da Rocha.`);
+    } else {
+      const isNowSabado = explicitValue !== undefined ? explicitValue : !target?.clienteSabado;
+      showToast(isNowSabado ? `Cliente marcado como Cliente de Sábado!` : `Cliente desmarcado de Cliente de Sábado.`);
+    }
   };
 
   /**
@@ -266,6 +282,7 @@ export default function App() {
     nome: string; 
     telefone: string; 
     clienteSabado?: boolean;
+    clienteFrancoDaRocha?: boolean;
     primeiroPedido?: { data: string; itens: { produto: ProductType; quantidade: number }[] } 
   }) => {
     const exists = clients.some(c => c.telefone === clientData.telefone);
@@ -289,6 +306,7 @@ export default function App() {
       telefone: clientData.telefone,
       nome: clientData.nome,
       clienteSabado: !!clientData.clienteSabado,
+      clienteFrancoDaRocha: !!clientData.clienteFrancoDaRocha,
       historico: firstOrderList,
       ...metrics
     };
@@ -467,18 +485,19 @@ export default function App() {
       return;
     }
 
+    const isSP = activeUnit === 'SP';
     let filteredList = [...clients];
     let filename = 'clientes_alho_e_so.txt';
     let label = 'Todos os Contatos';
 
     if (filterType === 'sabado-apenas') {
-      filteredList = clients.filter(c => c.clienteSabado);
-      filename = 'clientes_alho_e_so_sabado.txt';
-      label = 'Apenas Clientes de Sábado';
+      filteredList = clients.filter(c => isSP ? c.clienteFrancoDaRocha : c.clienteSabado);
+      filename = isSP ? 'clientes_alho_e_so_franco_da_rocha.txt' : 'clientes_alho_e_so_sabado.txt';
+      label = isSP ? 'Apenas Clientes de Franco da Rocha' : 'Apenas Clientes de Sábado';
     } else if (filterType === 'sabado-exceto') {
-      filteredList = clients.filter(c => !c.clienteSabado);
-      filename = 'clientes_alho_e_so_exceto_sabado.txt';
-      label = 'Clientes exceto Sábado';
+      filteredList = clients.filter(c => isSP ? !c.clienteFrancoDaRocha : !c.clienteSabado);
+      filename = isSP ? 'clientes_alho_e_so_exceto_franco_da_rocha.txt' : 'clientes_alho_e_so_exceto_sabado.txt';
+      label = isSP ? 'Clientes exceto Franco da Rocha' : 'Clientes exceto Sábado';
     } else if (filterType === '40') {
       // Clientes sem compras nos últimos 40 dias ou nunca compraram (0 totalPedidos)
       filteredList = clients.filter(c => c.totalPedidos === 0 || (c.ultimaCompra && getDaysSince(c.ultimaCompra) > 40));
@@ -504,7 +523,12 @@ export default function App() {
     const sortedList = [...filteredList].sort((a, b) => a.nome.localeCompare(b.nome));
 
     const txtContent = sortedList
-      .map(c => `${c.telefone} - ${c.nome}${c.clienteSabado ? ' (SÁBADO)' : ''}`)
+      .map(c => {
+        const tagNote = isSP 
+          ? (c.clienteFrancoDaRocha ? ' (FRANCO DA ROCHA)' : '') 
+          : (c.clienteSabado ? ' (SÁBADO)' : '');
+        return `${c.telefone} - ${c.nome}${tagNote}`;
+      })
       .join('\n');
 
     const blob = new Blob([txtContent], { type: 'text/plain;charset=utf-8' });
@@ -524,14 +548,15 @@ export default function App() {
    * Copia rapidamente os números de telefone para a área de transferência
    */
   const handleCopyPhones = (filterType: 'todos' | 'sabado-apenas' | 'sabado-exceto') => {
+    const isSP = activeUnit === 'SP';
     let list = [...clients];
     let label = 'todos os contatos';
     if (filterType === 'sabado-apenas') {
-      list = list.filter(c => c.clienteSabado);
-      label = 'clientes de sábado';
+      list = list.filter(c => isSP ? c.clienteFrancoDaRocha : c.clienteSabado);
+      label = isSP ? 'clientes de Franco da Rocha' : 'clientes de sábado';
     } else if (filterType === 'sabado-exceto') {
-      list = list.filter(c => !c.clienteSabado);
-      label = 'clientes sem sábado';
+      list = list.filter(c => isSP ? !c.clienteFrancoDaRocha : !c.clienteSabado);
+      label = isSP ? 'clientes sem Franco da Rocha' : 'clientes sem sábado';
     }
 
     if (list.length === 0) {
@@ -623,11 +648,12 @@ export default function App() {
     }
 
     // 2. Segment classification
+    const isSP = activeUnit === 'SP';
     if (selectedSegment === 'sabado') {
-      list = list.filter(c => c.clienteSabado);
+      list = list.filter(c => isSP ? c.clienteFrancoDaRocha : c.clienteSabado);
     }
     else if (selectedSegment === 'sabado-exceto') {
-      list = list.filter(c => !c.clienteSabado);
+      list = list.filter(c => isSP ? !c.clienteFrancoDaRocha : !c.clienteSabado);
     }
     else if (selectedSegment === 'sem-nome') {
       list = list.filter(c => c.nome.startsWith('SEM NOME'));
@@ -863,7 +889,7 @@ export default function App() {
                         </div>
                       </button>
 
-                      {/* Saturday Client Export Options */}
+                      {/* Unit Tag Client Export Options (Franco da Rocha for SP / Sábado for Guarulhos) */}
                       <button
                         onClick={() => {
                           handleDownloadClientsTXT('sabado-apenas');
@@ -876,10 +902,10 @@ export default function App() {
                         </div>
                         <div>
                           <p className="text-xs font-black text-amber-950 leading-tight flex items-center gap-1">
-                            🗓️ Apenas Clientes de Sábado (.TXT)
+                            {activeUnit === 'SP' ? '🏙️ Clientes Franco da Rocha (.TXT)' : '🗓️ Apenas Clientes de Sábado (.TXT)'}
                           </p>
                           <p className="text-[10px] text-amber-700/80 font-mono mt-0.5">
-                            {clients.filter(c => c.clienteSabado).length} clientes marcados
+                            {clients.filter(c => activeUnit === 'SP' ? c.clienteFrancoDaRocha : c.clienteSabado).length} clientes marcados
                           </p>
                         </div>
                       </button>
@@ -895,9 +921,11 @@ export default function App() {
                           <Users size={14} />
                         </div>
                         <div>
-                          <p className="text-xs font-bold text-slate-900 leading-tight">Clientes EXCETO Sábado (.TXT)</p>
+                          <p className="text-xs font-bold text-slate-900 leading-tight">
+                            {activeUnit === 'SP' ? 'Clientes EXCETO Franco da Rocha (.TXT)' : 'Clientes EXCETO Sábado (.TXT)'}
+                          </p>
                           <p className="text-[10px] text-slate-500 font-mono mt-0.5">
-                            {clients.filter(c => !c.clienteSabado).length} outros contatos
+                            {clients.filter(c => activeUnit === 'SP' ? !c.clienteFrancoDaRocha : !c.clienteSabado).length} outros contatos
                           </p>
                         </div>
                       </button>
@@ -915,7 +943,7 @@ export default function App() {
                             }}
                             className="text-[10px] font-mono font-bold py-1.5 px-2 bg-amber-100 hover:bg-amber-200 text-amber-950 rounded-lg border border-amber-300/60 transition-all text-center"
                           >
-                            📋 Copiar Sábado
+                            {activeUnit === 'SP' ? '📋 Copiar Franco' : '📋 Copiar Sábado'}
                           </button>
                           <button
                             onClick={() => {
@@ -1151,8 +1179,8 @@ export default function App() {
                   <div className="flex flex-wrap gap-1.5">
                     {[
                       { id: 'todos', label: 'Todos' },
-                      { id: 'sabado', label: '🗓️ Clientes de Sábado' },
-                      { id: 'sabado-exceto', label: 'Outros Dias (Sem Sábado)' },
+                      { id: 'sabado', label: activeUnit === 'SP' ? '🏙️ Clientes Franco da Rocha' : '🗓️ Clientes de Sábado' },
+                      { id: 'sabado-exceto', label: activeUnit === 'SP' ? 'Outros Clientes (Sem Franco)' : 'Outros Dias (Sem Sábado)' },
                       { id: 'sem-nome', label: 'Sem Nome' },
                       { id: 'inativos-30', label: 'Inativos +30d' },
                       { id: 'inativos-60', label: 'Inativos +60d' },
@@ -1263,17 +1291,17 @@ export default function App() {
                                       {client.nome.startsWith('SEM NOME') && (
                                         <span className="bg-slate-100 text-slate-500 text-[9px] px-1.5 py-0.2 rounded font-mono">S/N</span>
                                       )}
-                                      {client.clienteSabado ? (
+                                      {(activeUnit === 'SP' ? client.clienteFrancoDaRocha : client.clienteSabado) ? (
                                         <button
                                           type="button"
                                           onClick={(e) => {
                                             e.stopPropagation();
                                             handleToggleClientSabado(client.telefone);
                                           }}
-                                          title="Clique para remover a tag de Cliente de Sábado"
+                                          title={activeUnit === 'SP' ? "Clique para remover a tag de Franco da Rocha" : "Clique para remover a tag de Cliente de Sábado"}
                                           className="bg-amber-100 hover:bg-amber-200 text-amber-900 text-[9px] font-black font-mono px-1.5 py-0.5 rounded border border-amber-300 transition-all shrink-0 flex items-center gap-0.5"
                                         >
-                                          🗓️ SÁBADO
+                                          {activeUnit === 'SP' ? '🏙️ FRANCO DA ROCHA' : '🗓️ SÁBADO'}
                                         </button>
                                       ) : (
                                         <button
@@ -1282,10 +1310,10 @@ export default function App() {
                                             e.stopPropagation();
                                             handleToggleClientSabado(client.telefone);
                                           }}
-                                          title="Clique para marcar como Cliente de Sábado"
+                                          title={activeUnit === 'SP' ? "Clique para marcar como Franco da Rocha" : "Clique para marcar como Cliente de Sábado"}
                                           className="opacity-0 group-hover:opacity-100 bg-slate-100 hover:bg-amber-100 text-slate-500 hover:text-amber-800 text-[9px] font-mono font-bold px-1.5 py-0.5 rounded border border-slate-200 hover:border-amber-300 transition-all shrink-0"
                                         >
-                                          + Sábado
+                                          {activeUnit === 'SP' ? '+ Franco' : '+ Sábado'}
                                         </button>
                                       )}
                                       <button
@@ -1582,13 +1610,15 @@ export default function App() {
                         </p>
                       )}
 
-                      {/* Saturday Client Status Toggle */}
+                      {/* Unit Tag Client Status Toggle */}
                       <div className="mt-3 pt-2.5 border-t border-slate-800 flex items-center justify-between">
                         <div className="flex items-center gap-2">
-                          <span className="text-xs font-mono font-medium text-slate-400">Cliente de Sábado:</span>
-                          {selectedClient.clienteSabado ? (
+                          <span className="text-xs font-mono font-medium text-slate-400">
+                            {activeUnit === 'SP' ? 'Cliente Franco da Rocha:' : 'Cliente de Sábado:'}
+                          </span>
+                          {(activeUnit === 'SP' ? selectedClient.clienteFrancoDaRocha : selectedClient.clienteSabado) ? (
                             <span className="bg-amber-500 text-slate-950 font-black text-[10px] px-2 py-0.5 rounded font-mono uppercase shadow-xs">
-                              🗓️ SÁBADO
+                              {activeUnit === 'SP' ? '🏙️ FRANCO DA ROCHA' : '🗓️ SÁBADO'}
                             </span>
                           ) : (
                             <span className="text-xs font-mono text-slate-500">Não</span>
@@ -1598,12 +1628,14 @@ export default function App() {
                           type="button"
                           onClick={() => handleToggleClientSabado(selectedClient.telefone)}
                           className={`text-[10px] font-bold font-mono px-2.5 py-1 rounded-lg transition-all ${
-                            selectedClient.clienteSabado
+                            (activeUnit === 'SP' ? selectedClient.clienteFrancoDaRocha : selectedClient.clienteSabado)
                               ? 'bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/30'
                               : 'bg-amber-500 hover:bg-amber-600 text-slate-950 font-black shadow-xs'
                           }`}
                         >
-                          {selectedClient.clienteSabado ? 'Remover Tag' : '+ Marcar Sábado'}
+                          {(activeUnit === 'SP' ? selectedClient.clienteFrancoDaRocha : selectedClient.clienteSabado) 
+                            ? 'Remover Tag' 
+                            : (activeUnit === 'SP' ? '+ Marcar Franco' : '+ Marcar Sábado')}
                         </button>
                       </div>
                     </div>
@@ -1905,6 +1937,7 @@ export default function App() {
         onClose={() => setIsNewOrderOpen(false)}
         clients={clients}
         initialSelectedClient={prefilledClientInOrder}
+        activeUnit={activeUnit}
         onSaveOrder={handleSaveOrder}
         onUpdateClientName={handleUpdateClientName}
       />
@@ -1913,6 +1946,7 @@ export default function App() {
         isOpen={isNewClientOpen}
         onClose={() => setIsNewClientOpen(false)}
         clients={clients}
+        activeUnit={activeUnit}
         onSaveClient={handleSaveClient}
       />
 
