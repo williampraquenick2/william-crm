@@ -480,11 +480,12 @@ export default function App() {
   };
 
   /**
-   * Baixa a lista de clientes no formato Excel (.xlsx) com exatamente:
-   * Coluna A: Números (Telefone)
-   * Coluna B: Nomes (Nome)
+   * Baixa a lista de clientes no formato Excel (.xlsx) com:
+   * Aba 1: "Números" (Coluna A: Número)
+   * Aba 2: "Nomes" (Coluna A: Nome)
+   * Aba 3: "Números e Nomes" (Coluna A: Número | Coluna B: Nome)
    */
-  const handleDownloadClientsExcel = (filterType: 'todos' | 'ativos' | 'ativos-30' | 'sabado-apenas' | 'sabado-exceto' | '40' | '50' | '60' | 'atual') => {
+  const handleDownloadClientsExcel = (filterType: 'inativos' | 'inativos-30' | '40' | '50' | '60' | '90' | 'todos' | 'ativos' | 'ativos-30' | 'sabado-apenas' | 'sabado-exceto' | 'atual') => {
     if (clients.length === 0) {
       showToast("Não há clientes cadastrados para exportar.");
       return;
@@ -495,7 +496,32 @@ export default function App() {
     let filename = isSP ? 'clientes_alho_e_so_sp.xlsx' : 'clientes_alho_e_so_guarulhos.xlsx';
     let label = 'Todos os Contatos';
 
-    if (filterType === 'ativos') {
+    if (filterType === 'inativos') {
+      // Clientes inativos: sem compras nos últimos 60 dias ou que nunca compraram
+      filteredList = clients.filter(c => c.totalPedidos === 0 || (c.ultimaCompra && getDaysSince(c.ultimaCompra) > 60));
+      filename = isSP ? 'clientes_inativos_sp.xlsx' : 'clientes_inativos_guarulhos.xlsx';
+      label = 'Clientes Inativos (+60 dias)';
+    } else if (filterType === 'inativos-30') {
+      filteredList = clients.filter(c => c.totalPedidos === 0 || (c.ultimaCompra && getDaysSince(c.ultimaCompra) > 30));
+      filename = isSP ? 'clientes_inativos_30_dias_sp.xlsx' : 'clientes_inativos_30_dias_guarulhos.xlsx';
+      label = 'Inativos (+30 dias)';
+    } else if (filterType === '40') {
+      filteredList = clients.filter(c => c.totalPedidos === 0 || (c.ultimaCompra && getDaysSince(c.ultimaCompra) > 40));
+      filename = isSP ? 'clientes_inativos_40_dias_sp.xlsx' : 'clientes_inativos_40_dias_guarulhos.xlsx';
+      label = 'Inativos (+40 dias)';
+    } else if (filterType === '50') {
+      filteredList = clients.filter(c => c.totalPedidos === 0 || (c.ultimaCompra && getDaysSince(c.ultimaCompra) > 50));
+      filename = isSP ? 'clientes_inativos_50_dias_sp.xlsx' : 'clientes_inativos_50_dias_guarulhos.xlsx';
+      label = 'Inativos (+50 dias)';
+    } else if (filterType === '60') {
+      filteredList = clients.filter(c => c.totalPedidos === 0 || (c.ultimaCompra && getDaysSince(c.ultimaCompra) > 60));
+      filename = isSP ? 'clientes_inativos_60_dias_sp.xlsx' : 'clientes_inativos_60_dias_guarulhos.xlsx';
+      label = 'Inativos (+60 dias)';
+    } else if (filterType === '90') {
+      filteredList = clients.filter(c => c.totalPedidos === 0 || (c.ultimaCompra && getDaysSince(c.ultimaCompra) > 90));
+      filename = isSP ? 'clientes_inativos_90_dias_sp.xlsx' : 'clientes_inativos_90_dias_guarulhos.xlsx';
+      label = 'Inativos (+90 dias)';
+    } else if (filterType === 'ativos') {
       // Clientes ativos: compraram nos últimos 60 dias
       filteredList = clients.filter(c => c.totalPedidos > 0 && getDaysSince(c.ultimaCompra) <= 60);
       filename = isSP ? 'clientes_ativos_sp.xlsx' : 'clientes_ativos_guarulhos.xlsx';
@@ -513,18 +539,6 @@ export default function App() {
       filteredList = clients.filter(c => isSP ? !c.clienteFrancoDaRocha : !c.clienteSabado);
       filename = isSP ? 'clientes_exceto_franco_da_rocha.xlsx' : 'clientes_exceto_sabado.xlsx';
       label = isSP ? 'Clientes Exceto Franco da Rocha' : 'Clientes Exceto Sábado';
-    } else if (filterType === '40') {
-      filteredList = clients.filter(c => c.totalPedidos === 0 || (c.ultimaCompra && getDaysSince(c.ultimaCompra) > 40));
-      filename = isSP ? 'clientes_inativos_40_dias_sp.xlsx' : 'clientes_inativos_40_dias_guarulhos.xlsx';
-      label = 'Inativos +40 dias';
-    } else if (filterType === '50') {
-      filteredList = clients.filter(c => c.totalPedidos === 0 || (c.ultimaCompra && getDaysSince(c.ultimaCompra) > 50));
-      filename = isSP ? 'clientes_inativos_50_dias_sp.xlsx' : 'clientes_inativos_50_dias_guarulhos.xlsx';
-      label = 'Inativos +50 dias';
-    } else if (filterType === '60') {
-      filteredList = clients.filter(c => c.totalPedidos === 0 || (c.ultimaCompra && getDaysSince(c.ultimaCompra) > 60));
-      filename = isSP ? 'clientes_inativos_60_dias_sp.xlsx' : 'clientes_inativos_60_dias_guarulhos.xlsx';
-      label = 'Inativos +60 dias';
     } else if (filterType === 'atual') {
       filteredList = [...filteredClients];
       filename = isSP ? 'clientes_filtrados_sp.xlsx' : 'clientes_filtrados_guarulhos.xlsx';
@@ -538,26 +552,37 @@ export default function App() {
 
     const sortedList = [...filteredList].sort((a, b) => a.nome.localeCompare(b.nome));
 
-    // Formato especificado pelo usuário:
-    // Coluna A: Números (Telefone) | Coluna B: Nomes
-    const rows = [
+    const wb = XLSX.utils.book_new();
+
+    // 📄 ABA 1: NÚMEROS (Apenas os números de telefone na coluna A)
+    const wsNumeros = XLSX.utils.aoa_to_sheet([
+      ["Número"],
+      ...sortedList.map(c => [c.telefone])
+    ]);
+    wsNumeros['!cols'] = [{ wch: 22 }];
+    XLSX.utils.book_append_sheet(wb, wsNumeros, "Números");
+
+    // 📄 ABA 2: NOMES (Apenas os nomes dos clientes na coluna A)
+    const wsNomes = XLSX.utils.aoa_to_sheet([
+      ["Nome"],
+      ...sortedList.map(c => [c.nome])
+    ]);
+    wsNomes['!cols'] = [{ wch: 40 }];
+    XLSX.utils.book_append_sheet(wb, wsNomes, "Nomes");
+
+    // 📄 ABA 3: NÚMEROS E NOMES (Coluna A: Número | Coluna B: Nome)
+    const wsContatos = XLSX.utils.aoa_to_sheet([
       ["Número", "Nome"],
       ...sortedList.map(c => [c.telefone, c.nome])
-    ];
-
-    const ws = XLSX.utils.aoa_to_sheet(rows);
-    
-    // Configura a largura das colunas
-    ws['!cols'] = [
-      { wch: 20 }, // Coluna A: Número
+    ]);
+    wsContatos['!cols'] = [
+      { wch: 22 }, // Coluna A: Número
       { wch: 40 }  // Coluna B: Nome
     ];
-
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Contatos");
+    XLSX.utils.book_append_sheet(wb, wsContatos, "Números e Nomes");
 
     XLSX.writeFile(wb, filename);
-    showToast(`Excel (.xlsx) baixado: ${sortedList.length} clientes (${label})!`);
+    showToast(`Excel (.xlsx) baixado: ${sortedList.length} clientes (${label}) com abas de Números e Nomes!`);
   };
 
   /**
@@ -805,11 +830,14 @@ export default function App() {
   const totalRegistered = clients.length;
   const noNameCount = clients.filter(c => c.nome.startsWith('SEM NOME')).length;
   
-  // Active = purchased within last 60 days. Inactive = hasn't purchased in >60 days
+  // Active = purchased within last 60 days. Inactive = hasn't purchased in >60 days or never purchased
   const activeCount = clients.filter(c => c.totalPedidos > 0 && getDaysSince(c.ultimaCompra) <= 60).length;
-  const inactive30Count = clients.filter(c => c.totalPedidos > 0 && getDaysSince(c.ultimaCompra) > 30).length;
-  const inactive60Count = clients.filter(c => c.totalPedidos > 0 && getDaysSince(c.ultimaCompra) > 60).length;
-  const inactive90Count = clients.filter(c => c.totalPedidos > 0 && getDaysSince(c.ultimaCompra) > 90).length;
+  const inactiveCount = clients.filter(c => c.totalPedidos === 0 || (c.ultimaCompra && getDaysSince(c.ultimaCompra) > 60)).length;
+  const inactive30Count = clients.filter(c => c.totalPedidos === 0 || (c.ultimaCompra && getDaysSince(c.ultimaCompra) > 30)).length;
+  const inactive40Count = clients.filter(c => c.totalPedidos === 0 || (c.ultimaCompra && getDaysSince(c.ultimaCompra) > 40)).length;
+  const inactive50Count = clients.filter(c => c.totalPedidos === 0 || (c.ultimaCompra && getDaysSince(c.ultimaCompra) > 50)).length;
+  const inactive60Count = clients.filter(c => c.totalPedidos === 0 || (c.ultimaCompra && getDaysSince(c.ultimaCompra) > 60)).length;
+  const inactive90Count = clients.filter(c => c.totalPedidos === 0 || (c.ultimaCompra && getDaysSince(c.ultimaCompra) > 90)).length;
   
   const totalOrdersCount = clients.reduce((sum, c) => sum + c.totalPedidos, 0);
   const totalProductsVolumeCount = clients.reduce((sum, c) => sum + c.totalProdutosComprados, 0);
@@ -1026,29 +1054,113 @@ export default function App() {
                     {downloadFormatTab === 'excel' && (
                       <div>
                         {/* Format Note for User */}
-                        <div className="bg-emerald-50 border border-emerald-200/80 rounded-xl p-2 mb-2 text-[10px] text-emerald-900 font-mono flex items-center justify-between">
-                          <span className="font-bold">📊 Formato da Planilha:</span>
-                          <span className="bg-emerald-200/60 px-1.5 py-0.5 rounded font-black">Col A: Números | Col B: Nomes</span>
+                        <div className="bg-emerald-50 border border-emerald-200/80 rounded-xl p-2.5 mb-2.5 text-[11px] text-emerald-950 font-mono">
+                          <p className="font-bold flex items-center gap-1.5 text-emerald-900">
+                            <span>📊</span> Estrutura das Abas do Arquivo Excel:
+                          </p>
+                          <div className="mt-1 grid grid-cols-2 gap-1 text-[10px]">
+                            <span className="bg-white/80 border border-emerald-200 px-1.5 py-0.5 rounded font-medium">📄 Aba 1: <strong>Números</strong> (Telefones)</span>
+                            <span className="bg-white/80 border border-emerald-200 px-1.5 py-0.5 rounded font-medium">📄 Aba 2: <strong>Nomes</strong> (Clientes)</span>
+                          </div>
+                          <p className="text-[9px] text-emerald-700 mt-1 font-sans italic">+ Aba 3 com ambos lado a lado (Col A: Número | Col B: Nome)</p>
                         </div>
 
-                        <div className="space-y-1">
-                          {/* Active Clients (Highlighted) */}
-                          <div className="pb-1">
-                            <span className="text-[9px] font-black tracking-wider uppercase text-emerald-700 font-mono block px-2 pb-1">
-                              Clientes Ativos
+                        <div className="space-y-2">
+                          {/* INACTIVE CLIENTS (PROMINENT HIGHLIGHT) */}
+                          <div className="bg-rose-50/70 border border-rose-200/80 rounded-2xl p-2">
+                            <span className="text-[9px] font-black tracking-wider uppercase text-rose-700 font-mono block px-1 pb-1 flex items-center justify-between">
+                              <span>🚫 Clientes Inativos</span>
+                              <span className="text-[10px] bg-rose-200/70 text-rose-900 px-1.5 py-0.2 rounded font-bold">{inactiveCount} no total</span>
                             </span>
+
+                            <button
+                              onClick={() => {
+                                handleDownloadClientsExcel('inativos');
+                                setIsDownloadMenuOpen(false);
+                              }}
+                              className="w-full text-left px-2.5 py-2 hover:bg-rose-100/80 rounded-xl transition-colors flex items-start gap-2.5 group bg-white border border-rose-200 shadow-xs cursor-pointer"
+                            >
+                              <div className="p-1.5 bg-rose-600 text-white rounded-lg shadow-xs mt-0.5">
+                                <Clock size={14} />
+                              </div>
+                              <div>
+                                <p className="text-xs font-black text-rose-950 leading-tight">
+                                  🚫 Baixar APENAS Clientes Inativos (.XLSX)
+                                </p>
+                                <p className="text-[10px] text-rose-700 font-mono mt-0.5">
+                                  {inactiveCount} clientes (+60 dias sem compra ou nunca compraram)
+                                </p>
+                              </div>
+                            </button>
+
+                            {/* Sub-ranges for Inactives */}
+                            <div className="grid grid-cols-4 gap-1 mt-1.5">
+                              <button
+                                onClick={() => {
+                                  handleDownloadClientsExcel('inativos-30');
+                                  setIsDownloadMenuOpen(false);
+                                }}
+                                title="Exportar clientes sem compras há mais de 30 dias"
+                                className="p-1.5 bg-white hover:bg-rose-100/60 text-slate-800 rounded-lg border border-rose-100 text-center transition-colors cursor-pointer"
+                              >
+                                <p className="text-[10px] font-black text-rose-900">+30 Dias</p>
+                                <p className="text-[8px] text-slate-500 font-mono">{inactive30Count} clis</p>
+                              </button>
+                              <button
+                                onClick={() => {
+                                  handleDownloadClientsExcel('40');
+                                  setIsDownloadMenuOpen(false);
+                                }}
+                                title="Exportar clientes sem compras há mais de 40 dias"
+                                className="p-1.5 bg-white hover:bg-rose-100/60 text-slate-800 rounded-lg border border-rose-100 text-center transition-colors cursor-pointer"
+                              >
+                                <p className="text-[10px] font-black text-rose-900">+40 Dias</p>
+                                <p className="text-[8px] text-slate-500 font-mono">{inactive40Count} clis</p>
+                              </button>
+                              <button
+                                onClick={() => {
+                                  handleDownloadClientsExcel('50');
+                                  setIsDownloadMenuOpen(false);
+                                }}
+                                title="Exportar clientes sem compras há mais de 50 dias"
+                                className="p-1.5 bg-white hover:bg-rose-100/60 text-slate-800 rounded-lg border border-rose-100 text-center transition-colors cursor-pointer"
+                              >
+                                <p className="text-[10px] font-black text-rose-900">+50 Dias</p>
+                                <p className="text-[8px] text-slate-500 font-mono">{inactive50Count} clis</p>
+                              </button>
+                              <button
+                                onClick={() => {
+                                  handleDownloadClientsExcel('90');
+                                  setIsDownloadMenuOpen(false);
+                                }}
+                                title="Exportar clientes sem compras há mais de 90 dias"
+                                className="p-1.5 bg-white hover:bg-rose-100/60 text-slate-800 rounded-lg border border-rose-100 text-center transition-colors cursor-pointer"
+                              >
+                                <p className="text-[10px] font-black text-rose-900">+90 Dias</p>
+                                <p className="text-[8px] text-slate-500 font-mono">{inactive90Count} clis</p>
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Active Clients (Highlighted) */}
+                          <div className="bg-emerald-50/70 border border-emerald-200/80 rounded-2xl p-2">
+                            <span className="text-[9px] font-black tracking-wider uppercase text-emerald-700 font-mono block px-1 pb-1 flex items-center justify-between">
+                              <span>✅ Clientes Ativos</span>
+                              <span className="text-[10px] bg-emerald-200/70 text-emerald-900 px-1.5 py-0.2 rounded font-bold">{activeCount} no total</span>
+                            </span>
+
                             <button
                               onClick={() => {
                                 handleDownloadClientsExcel('ativos');
                                 setIsDownloadMenuOpen(false);
                               }}
-                              className="w-full text-left px-2.5 py-2 hover:bg-emerald-100/80 rounded-xl transition-colors flex items-start gap-2.5 group bg-emerald-50 border border-emerald-200/60"
+                              className="w-full text-left px-2.5 py-2 hover:bg-emerald-100/80 rounded-xl transition-colors flex items-start gap-2.5 group bg-white border border-emerald-200 shadow-xs cursor-pointer"
                             >
                               <div className="p-1.5 bg-emerald-600 text-white rounded-lg shadow-xs mt-0.5">
                                 <UserCheck size={14} />
                               </div>
                               <div>
-                                <p className="text-xs font-black text-emerald-950 leading-tight flex items-center gap-1">
+                                <p className="text-xs font-black text-emerald-950 leading-tight">
                                   ✅ Apenas Clientes Ativos (.XLSX)
                                 </p>
                                 <p className="text-[10px] text-emerald-800 font-mono mt-0.5">
@@ -1062,40 +1174,33 @@ export default function App() {
                                 handleDownloadClientsExcel('ativos-30');
                                 setIsDownloadMenuOpen(false);
                               }}
-                              className="w-full text-left px-2.5 py-2 hover:bg-emerald-50 rounded-xl transition-colors flex items-start gap-2.5 group mt-1"
+                              className="w-full text-left px-2 py-1.5 hover:bg-emerald-100/60 rounded-xl transition-colors flex items-center gap-2 group mt-1 bg-white/70 border border-emerald-100 cursor-pointer"
                             >
-                              <div className="p-1.5 bg-emerald-100 text-emerald-700 rounded-lg group-hover:bg-emerald-200 transition-colors mt-0.5">
-                                <Sparkles size={14} />
-                              </div>
-                              <div>
-                                <p className="text-xs font-bold text-slate-900 leading-tight">
-                                  ⚡ Ativos Recentes (Até 30 dias)
-                                </p>
-                                <p className="text-[10px] text-slate-500 font-mono mt-0.5">
-                                  {clients.filter(c => c.totalPedidos > 0 && getDaysSince(c.ultimaCompra) <= 30).length} clientes mais frequentes
-                                </p>
-                              </div>
+                              <Sparkles size={13} className="text-emerald-700" />
+                              <span className="text-[11px] font-bold text-slate-800">Ativos Recentes (Até 30 dias)</span>
+                              <span className="text-[9px] font-mono text-emerald-700 ml-auto font-bold">
+                                {clients.filter(c => c.totalPedidos > 0 && getDaysSince(c.ultimaCompra) <= 30).length} clis
+                              </span>
                             </button>
                           </div>
 
                           {/* All Clients & Current Screen Filter */}
-                          <div className="border-t border-slate-100 pt-1.5">
-                            <span className="text-[9px] font-black tracking-wider uppercase text-slate-400 font-mono block px-2 pb-1">
-                              Todos os Contatos
+                          <div className="border-t border-slate-100 pt-1.5 space-y-1">
+                            <span className="text-[9px] font-black tracking-wider uppercase text-slate-400 font-mono block px-2 pb-0.5">
+                              Outras Listas (.XLSX)
                             </span>
                             <button
                               onClick={() => {
                                 handleDownloadClientsExcel('todos');
                                 setIsDownloadMenuOpen(false);
                               }}
-                              className="w-full text-left px-2.5 py-2 hover:bg-slate-50 rounded-xl transition-colors flex items-start gap-2.5 group"
+                              className="w-full text-left px-2.5 py-1.5 hover:bg-slate-50 rounded-xl transition-colors flex items-center gap-2.5 group cursor-pointer"
                             >
-                              <div className="p-1.5 bg-sky-50 text-sky-600 rounded-lg group-hover:bg-sky-100 transition-colors mt-0.5">
-                                <Users size={14} />
+                              <div className="p-1.5 bg-sky-50 text-sky-600 rounded-lg group-hover:bg-sky-100 transition-colors">
+                                <Users size={13} />
                               </div>
-                              <div>
-                                <p className="text-xs font-bold text-slate-900 leading-tight">Todos os Contatos (.XLSX)</p>
-                                <p className="text-[10px] text-slate-500 font-mono mt-0.5">Sem filtros ({clients.length} contatos cadastrados)</p>
+                              <div className="flex-1">
+                                <p className="text-xs font-bold text-slate-900 leading-tight">Todos os Contatos ({clients.length})</p>
                               </div>
                             </button>
 
@@ -1104,101 +1209,32 @@ export default function App() {
                                 handleDownloadClientsExcel('atual');
                                 setIsDownloadMenuOpen(false);
                               }}
-                              className="w-full text-left px-2.5 py-2 hover:bg-slate-50 rounded-xl transition-colors flex items-start gap-2.5 group"
+                              className="w-full text-left px-2.5 py-1.5 hover:bg-slate-50 rounded-xl transition-colors flex items-center gap-2.5 group cursor-pointer"
                             >
-                              <div className="p-1.5 bg-amber-50 text-amber-700 rounded-lg group-hover:bg-amber-100 transition-colors mt-0.5">
-                                <Filter size={14} />
+                              <div className="p-1.5 bg-amber-50 text-amber-700 rounded-lg group-hover:bg-amber-100 transition-colors">
+                                <Filter size={13} />
                               </div>
-                              <div>
-                                <p className="text-xs font-bold text-slate-900 leading-tight">Filtro Atual da Tela (.XLSX)</p>
-                                <p className="text-[10px] text-slate-500 font-mono mt-0.5">Exporta os {filteredClients.length} contatos da tabela</p>
+                              <div className="flex-1">
+                                <p className="text-xs font-bold text-slate-900 leading-tight">Filtro Atual da Tela ({filteredClients.length})</p>
                               </div>
                             </button>
-                          </div>
 
-                          {/* Unit Tag Options */}
-                          <div className="border-t border-slate-100 pt-1.5">
-                            <span className="text-[9px] font-black tracking-wider uppercase text-amber-600 font-mono block px-2 pb-1">
-                              {activeUnit === 'SP' ? 'Região / Tag' : 'Dias da Semana'}
-                            </span>
                             <button
                               onClick={() => {
                                 handleDownloadClientsExcel('sabado-apenas');
                                 setIsDownloadMenuOpen(false);
                               }}
-                              className="w-full text-left px-2.5 py-2 hover:bg-amber-50 rounded-xl transition-colors flex items-start gap-2.5 group"
+                              className="w-full text-left px-2.5 py-1.5 hover:bg-amber-50/60 rounded-xl transition-colors flex items-center gap-2.5 group cursor-pointer"
                             >
-                              <div className="p-1.5 bg-amber-100 text-amber-800 rounded-lg group-hover:bg-amber-200 transition-colors mt-0.5">
-                                <Calendar size={14} />
+                              <div className="p-1.5 bg-amber-100 text-amber-800 rounded-lg group-hover:bg-amber-200 transition-colors">
+                                <Calendar size={13} />
                               </div>
-                              <div>
+                              <div className="flex-1">
                                 <p className="text-xs font-bold text-slate-900 leading-tight">
-                                  {activeUnit === 'SP' ? '🏙️ Clientes Franco da Rocha (.XLSX)' : '🗓️ Apenas Clientes de Sábado (.XLSX)'}
-                                </p>
-                                <p className="text-[10px] text-amber-700 font-mono mt-0.5">
-                                  {clients.filter(c => activeUnit === 'SP' ? c.clienteFrancoDaRocha : c.clienteSabado).length} clientes marcados
+                                  {activeUnit === 'SP' ? '🏙️ Franco da Rocha (.XLSX)' : '🗓️ Clientes de Sábado (.XLSX)'}
                                 </p>
                               </div>
                             </button>
-
-                            <button
-                              onClick={() => {
-                                handleDownloadClientsExcel('sabado-exceto');
-                                setIsDownloadMenuOpen(false);
-                              }}
-                              className="w-full text-left px-2.5 py-2 hover:bg-slate-50 rounded-xl transition-colors flex items-start gap-2.5 group"
-                            >
-                              <div className="p-1.5 bg-slate-100 text-slate-700 rounded-lg group-hover:bg-slate-200 transition-colors mt-0.5">
-                                <Users size={14} />
-                              </div>
-                              <div>
-                                <p className="text-xs font-bold text-slate-900 leading-tight">
-                                  {activeUnit === 'SP' ? 'Clientes EXCETO Franco da Rocha (.XLSX)' : 'Clientes EXCETO Sábado (.XLSX)'}
-                                </p>
-                                <p className="text-[10px] text-slate-500 font-mono mt-0.5">
-                                  {clients.filter(c => activeUnit === 'SP' ? !c.clienteFrancoDaRocha : !c.clienteSabado).length} outros contatos
-                                </p>
-                              </div>
-                            </button>
-                          </div>
-
-                          {/* Inactive Clients Section */}
-                          <div className="border-t border-slate-100 pt-1.5">
-                            <span className="text-[9px] font-black tracking-wider uppercase text-rose-500 font-mono block px-2 pb-1">
-                              Clientes Inativos (Excel)
-                            </span>
-                            <div className="grid grid-cols-3 gap-1">
-                              <button
-                                onClick={() => {
-                                  handleDownloadClientsExcel('40');
-                                  setIsDownloadMenuOpen(false);
-                                }}
-                                className="text-left p-2 hover:bg-amber-50 rounded-xl transition-colors border border-slate-100 text-center"
-                              >
-                                <p className="text-[11px] font-bold text-amber-900">+40 Dias</p>
-                                <p className="text-[9px] text-slate-500 font-mono">Inativos</p>
-                              </button>
-                              <button
-                                onClick={() => {
-                                  handleDownloadClientsExcel('50');
-                                  setIsDownloadMenuOpen(false);
-                                }}
-                                className="text-left p-2 hover:bg-amber-50 rounded-xl transition-colors border border-slate-100 text-center"
-                              >
-                                <p className="text-[11px] font-bold text-amber-900">+50 Dias</p>
-                                <p className="text-[9px] text-slate-500 font-mono">Inativos</p>
-                              </button>
-                              <button
-                                onClick={() => {
-                                  handleDownloadClientsExcel('60');
-                                  setIsDownloadMenuOpen(false);
-                                }}
-                                className="text-left p-2 hover:bg-rose-50 rounded-xl transition-colors border border-slate-100 text-center"
-                              >
-                                <p className="text-[11px] font-bold text-rose-900">+60 Dias</p>
-                                <p className="text-[9px] text-rose-600 font-mono">Reengajamento</p>
-                              </button>
-                            </div>
                           </div>
                         </div>
                       </div>
@@ -1501,14 +1537,22 @@ export default function App() {
                         {filteredClients.length} cadastrados
                       </span>
                     </h3>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        onClick={() => handleDownloadClientsExcel('inativos')}
+                        title="Baixar apenas clientes inativos em Excel (Aba 1: Números | Aba 2: Nomes)"
+                        className="text-[11px] font-mono font-bold px-2.5 py-1 bg-rose-50 hover:bg-rose-100 text-rose-800 border border-rose-200 rounded-lg transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer"
+                      >
+                        <Clock size={13} className="text-rose-700" />
+                        <span>Inativos (.xlsx)</span>
+                      </button>
                       <button
                         onClick={() => handleDownloadClientsExcel('atual')}
-                        title="Baixar lista filtrada atual em Excel (Coluna A: Telefones | Coluna B: Nomes)"
+                        title="Baixar lista filtrada atual em Excel (Aba 1: Números | Aba 2: Nomes)"
                         className="text-[11px] font-mono font-bold px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-lg transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer"
                       >
                         <FileSpreadsheet size={13} className="text-emerald-700" />
-                        <span>Baixar Excel</span>
+                        <span>Baixar Atual</span>
                       </button>
                       <div className="flex items-center gap-1 text-slate-400 pl-1 border-l border-slate-200">
                         <Filter size={14} className="text-slate-400" />
