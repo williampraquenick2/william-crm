@@ -15,6 +15,7 @@ export default function CommandBox({ onExecuteCommand }: CommandBoxProps) {
   const [feedback, setFeedback] = useState<string | null>(null);
 
   const commandShortcuts = [
+    { label: "Clientes ativos", cmd: "Mostrar clientes ativos" },
     { label: "Mostrar ranking", cmd: "Mostrar ranking" },
     { label: "Top 20 clientes", cmd: "Mostrar top 20 clientes" },
     { label: "Clientes sem nome", cmd: "Mostrar clientes sem nome" },

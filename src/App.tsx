@@ -73,7 +73,7 @@ export default function App() {
   const [activeUnit, setActiveUnit] = useState<'SP' | 'Guarulhos' | null>(null);
   const [clients, setClients] = useState<Client[]>([]);
   const [activeTab, setActiveTab] = useState<'clientes' | 'rankings' | 'relatorios'>('clientes');
-  const [selectedSegment, setSelectedSegment] = useState<'todos' | 'sem-nome' | 'inativos-30' | 'inativos-60' | 'inativos-90' | 'uma-compra' | 'top-20'>('todos');
+  const [selectedSegment, setSelectedSegment] = useState<'todos' | 'sabado' | 'sabado-exceto' | 'ativos' | 'ativos-30' | 'sem-nome' | 'inativos-30' | 'inativos-60' | 'inativos-90' | 'uma-compra' | 'top-20'>('todos');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [editingOrderId, setEditingOrderId] = useState<string | null>(null);
@@ -479,7 +479,7 @@ export default function App() {
   /**
    * Baixa a lista completa de clientes e telefones formatada em .txt (filtrada ou geral)
    */
-  const handleDownloadClientsTXT = (filterType: 'todos' | 'sabado-apenas' | 'sabado-exceto' | '40' | '50' | '60') => {
+  const handleDownloadClientsTXT = (filterType: 'todos' | 'ativos' | 'ativos-30' | 'sabado-apenas' | 'sabado-exceto' | '40' | '50' | '60') => {
     if (clients.length === 0) {
       showToast("Não há clientes cadastrados para exportar.");
       return;
@@ -487,10 +487,20 @@ export default function App() {
 
     const isSP = activeUnit === 'SP';
     let filteredList = [...clients];
-    let filename = 'clientes_alho_e_so.txt';
+    let filename = isSP ? 'clientes_alho_e_so_sp.txt' : 'clientes_alho_e_so_guarulhos.txt';
     let label = 'Todos os Contatos';
 
-    if (filterType === 'sabado-apenas') {
+    if (filterType === 'ativos') {
+      // Clientes ativos: compraram nos últimos 60 dias
+      filteredList = clients.filter(c => c.totalPedidos > 0 && getDaysSince(c.ultimaCompra) <= 60);
+      filename = isSP ? 'clientes_alho_e_so_ativos_sp.txt' : 'clientes_alho_e_so_ativos_guarulhos.txt';
+      label = 'Clientes Ativos (Últimos 60 dias)';
+    } else if (filterType === 'ativos-30') {
+      // Clientes super ativos: compraram nos últimos 30 dias
+      filteredList = clients.filter(c => c.totalPedidos > 0 && getDaysSince(c.ultimaCompra) <= 30);
+      filename = isSP ? 'clientes_alho_e_so_ativos_30_dias_sp.txt' : 'clientes_alho_e_so_ativos_30_dias_guarulhos.txt';
+      label = 'Clientes Ativos Recentes (Últimos 30 dias)';
+    } else if (filterType === 'sabado-apenas') {
       filteredList = clients.filter(c => isSP ? c.clienteFrancoDaRocha : c.clienteSabado);
       filename = isSP ? 'clientes_alho_e_so_franco_da_rocha.txt' : 'clientes_alho_e_so_sabado.txt';
       label = isSP ? 'Apenas Clientes de Franco da Rocha' : 'Apenas Clientes de Sábado';
@@ -501,17 +511,17 @@ export default function App() {
     } else if (filterType === '40') {
       // Clientes sem compras nos últimos 40 dias ou nunca compraram (0 totalPedidos)
       filteredList = clients.filter(c => c.totalPedidos === 0 || (c.ultimaCompra && getDaysSince(c.ultimaCompra) > 40));
-      filename = 'clientes_alho_e_so_inativos_40_dias.txt';
+      filename = isSP ? 'clientes_alho_e_so_inativos_40_dias_sp.txt' : 'clientes_alho_e_so_inativos_40_dias_guarulhos.txt';
       label = 'Sem compras +40 dias';
     } else if (filterType === '50') {
       // Clientes sem compras nos últimos 50 dias ou nunca compraram
       filteredList = clients.filter(c => c.totalPedidos === 0 || (c.ultimaCompra && getDaysSince(c.ultimaCompra) > 50));
-      filename = 'clientes_alho_e_so_inativos_50_dias.txt';
+      filename = isSP ? 'clientes_alho_e_so_inativos_50_dias_sp.txt' : 'clientes_alho_e_so_inativos_50_dias_guarulhos.txt';
       label = 'Sem compras +50 dias';
     } else if (filterType === '60') {
       // Clientes sem compras nos últimos 60 dias ou nunca compraram
       filteredList = clients.filter(c => c.totalPedidos === 0 || (c.ultimaCompra && getDaysSince(c.ultimaCompra) > 60));
-      filename = 'clientes_alho_e_so_inativos_60_dias.txt';
+      filename = isSP ? 'clientes_alho_e_so_inativos_60_dias_sp.txt' : 'clientes_alho_e_so_inativos_60_dias_guarulhos.txt';
       label = 'Sem compras +60 dias';
     }
 
@@ -547,11 +557,14 @@ export default function App() {
   /**
    * Copia rapidamente os números de telefone para a área de transferência
    */
-  const handleCopyPhones = (filterType: 'todos' | 'sabado-apenas' | 'sabado-exceto') => {
+  const handleCopyPhones = (filterType: 'todos' | 'ativos' | 'sabado-apenas' | 'sabado-exceto') => {
     const isSP = activeUnit === 'SP';
     let list = [...clients];
     let label = 'todos os contatos';
-    if (filterType === 'sabado-apenas') {
+    if (filterType === 'ativos') {
+      list = list.filter(c => c.totalPedidos > 0 && getDaysSince(c.ultimaCompra) <= 60);
+      label = 'clientes ativos';
+    } else if (filterType === 'sabado-apenas') {
       list = list.filter(c => isSP ? c.clienteFrancoDaRocha : c.clienteSabado);
       label = isSP ? 'clientes de Franco da Rocha' : 'clientes de sábado';
     } else if (filterType === 'sabado-exceto') {
@@ -624,6 +637,11 @@ export default function App() {
       setSearchQuery('');
       setActiveTab('clientes');
     } 
+    else if (cmd === "mostrar clientes ativos" || cmd === "clientes ativos") {
+      setSelectedSegment('ativos');
+      setSearchQuery('');
+      setActiveTab('clientes');
+    } 
     else {
       // General Smart Fallback: Text searches
       setSearchQuery(rawCommand);
@@ -649,7 +667,15 @@ export default function App() {
 
     // 2. Segment classification
     const isSP = activeUnit === 'SP';
-    if (selectedSegment === 'sabado') {
+    if (selectedSegment === 'ativos') {
+      // Clientes ativos: pedidos e última compra há até 60 dias
+      list = list.filter(c => c.totalPedidos > 0 && getDaysSince(c.ultimaCompra) <= 60);
+    }
+    else if (selectedSegment === 'ativos-30') {
+      // Clientes super ativos: pedidos e última compra há até 30 dias
+      list = list.filter(c => c.totalPedidos > 0 && getDaysSince(c.ultimaCompra) <= 30);
+    }
+    else if (selectedSegment === 'sabado') {
       list = list.filter(c => isSP ? c.clienteFrancoDaRocha : c.clienteSabado);
     }
     else if (selectedSegment === 'sabado-exceto') {
@@ -868,11 +894,12 @@ export default function App() {
                     className="fixed inset-0 z-40" 
                     onClick={() => setIsDownloadMenuOpen(false)} 
                   />
-                  <div className="absolute right-0 top-full mt-2 w-72 bg-white rounded-2xl shadow-xl border border-slate-200 z-50 p-2.5 text-left">
+                  <div className="absolute right-0 top-full mt-2 w-80 bg-white rounded-2xl shadow-xl border border-slate-200 z-50 p-2.5 text-left max-h-[85vh] overflow-y-auto">
                     <span className="text-[9px] font-black tracking-wider uppercase text-slate-400 font-mono block px-2.5 pb-2 border-b border-slate-100">
                       Exportar Contatos (.TXT)
                     </span>
-                    <div className="mt-1.5 space-y-0.5">
+                    <div className="mt-1.5 space-y-1">
+                      {/* All Clients */}
                       <button
                         onClick={() => {
                           handleDownloadClientsTXT('todos');
@@ -889,46 +916,97 @@ export default function App() {
                         </div>
                       </button>
 
-                      {/* Unit Tag Client Export Options (Franco da Rocha for SP / Sábado for Guarulhos) */}
-                      <button
-                        onClick={() => {
-                          handleDownloadClientsTXT('sabado-apenas');
-                          setIsDownloadMenuOpen(false);
-                        }}
-                        className="w-full text-left px-2.5 py-2 hover:bg-amber-50 rounded-xl transition-colors flex items-start gap-2.5 group bg-amber-50/40"
-                      >
-                        <div className="p-1.5 bg-amber-100 text-amber-800 rounded-lg group-hover:bg-amber-200 transition-colors mt-0.5">
-                          <Calendar size={14} />
-                        </div>
-                        <div>
-                          <p className="text-xs font-black text-amber-950 leading-tight flex items-center gap-1">
-                            {activeUnit === 'SP' ? '🏙️ Clientes Franco da Rocha (.TXT)' : '🗓️ Apenas Clientes de Sábado (.TXT)'}
-                          </p>
-                          <p className="text-[10px] text-amber-700/80 font-mono mt-0.5">
-                            {clients.filter(c => activeUnit === 'SP' ? c.clienteFrancoDaRocha : c.clienteSabado).length} clientes marcados
-                          </p>
-                        </div>
-                      </button>
+                      {/* ACTIVE CLIENTS (NEW) */}
+                      <div className="border-t border-slate-100 pt-1.5">
+                        <span className="text-[9px] font-black tracking-wider uppercase text-emerald-600 font-mono block px-2.5 pb-1">
+                          Clientes Ativos
+                        </span>
+                        <button
+                          onClick={() => {
+                            handleDownloadClientsTXT('ativos');
+                            setIsDownloadMenuOpen(false);
+                          }}
+                          className="w-full text-left px-2.5 py-2 hover:bg-emerald-50 rounded-xl transition-colors flex items-start gap-2.5 group bg-emerald-50/50"
+                        >
+                          <div className="p-1.5 bg-emerald-100 text-emerald-800 rounded-lg group-hover:bg-emerald-200 transition-colors mt-0.5">
+                            <UserCheck size={14} />
+                          </div>
+                          <div>
+                            <p className="text-xs font-black text-emerald-950 leading-tight flex items-center gap-1">
+                              ✅ Apenas Clientes Ativos (.TXT)
+                            </p>
+                            <p className="text-[10px] text-emerald-700 font-mono mt-0.5">
+                              {activeCount} clientes (compras até 60 dias)
+                            </p>
+                          </div>
+                        </button>
 
-                      <button
-                        onClick={() => {
-                          handleDownloadClientsTXT('sabado-exceto');
-                          setIsDownloadMenuOpen(false);
-                        }}
-                        className="w-full text-left px-2.5 py-2 hover:bg-slate-50 rounded-xl transition-colors flex items-start gap-2.5 group"
-                      >
-                        <div className="p-1.5 bg-slate-100 text-slate-700 rounded-lg group-hover:bg-slate-200 transition-colors mt-0.5">
-                          <Users size={14} />
-                        </div>
-                        <div>
-                          <p className="text-xs font-bold text-slate-900 leading-tight">
-                            {activeUnit === 'SP' ? 'Clientes EXCETO Franco da Rocha (.TXT)' : 'Clientes EXCETO Sábado (.TXT)'}
-                          </p>
-                          <p className="text-[10px] text-slate-500 font-mono mt-0.5">
-                            {clients.filter(c => activeUnit === 'SP' ? !c.clienteFrancoDaRocha : !c.clienteSabado).length} outros contatos
-                          </p>
-                        </div>
-                      </button>
+                        <button
+                          onClick={() => {
+                            handleDownloadClientsTXT('ativos-30');
+                            setIsDownloadMenuOpen(false);
+                          }}
+                          className="w-full text-left px-2.5 py-2 hover:bg-emerald-50/70 rounded-xl transition-colors flex items-start gap-2.5 group"
+                        >
+                          <div className="p-1.5 bg-emerald-50 text-emerald-700 rounded-lg group-hover:bg-emerald-100 transition-colors mt-0.5">
+                            <Sparkles size={14} />
+                          </div>
+                          <div>
+                            <p className="text-xs font-bold text-slate-900 leading-tight">
+                              ⚡ Ativos Recentes (Até 30 dias)
+                            </p>
+                            <p className="text-[10px] text-slate-500 font-mono mt-0.5">
+                              {clients.filter(c => c.totalPedidos > 0 && getDaysSince(c.ultimaCompra) <= 30).length} clientes mais frequentes
+                            </p>
+                          </div>
+                        </button>
+                      </div>
+
+                      {/* Unit Tag Client Export Options (Franco da Rocha for SP / Sábado for Guarulhos) */}
+                      <div className="border-t border-slate-100 pt-1.5">
+                        <span className="text-[9px] font-black tracking-wider uppercase text-amber-600 font-mono block px-2.5 pb-1">
+                          {activeUnit === 'SP' ? 'Região / Tag' : 'Dias da Semana'}
+                        </span>
+                        <button
+                          onClick={() => {
+                            handleDownloadClientsTXT('sabado-apenas');
+                            setIsDownloadMenuOpen(false);
+                          }}
+                          className="w-full text-left px-2.5 py-2 hover:bg-amber-50 rounded-xl transition-colors flex items-start gap-2.5 group bg-amber-50/40"
+                        >
+                          <div className="p-1.5 bg-amber-100 text-amber-800 rounded-lg group-hover:bg-amber-200 transition-colors mt-0.5">
+                            <Calendar size={14} />
+                          </div>
+                          <div>
+                            <p className="text-xs font-black text-amber-950 leading-tight flex items-center gap-1">
+                              {activeUnit === 'SP' ? '🏙️ Clientes Franco da Rocha (.TXT)' : '🗓️ Apenas Clientes de Sábado (.TXT)'}
+                            </p>
+                            <p className="text-[10px] text-amber-700/80 font-mono mt-0.5">
+                              {clients.filter(c => activeUnit === 'SP' ? c.clienteFrancoDaRocha : c.clienteSabado).length} clientes marcados
+                            </p>
+                          </div>
+                        </button>
+
+                        <button
+                          onClick={() => {
+                            handleDownloadClientsTXT('sabado-exceto');
+                            setIsDownloadMenuOpen(false);
+                          }}
+                          className="w-full text-left px-2.5 py-2 hover:bg-slate-50 rounded-xl transition-colors flex items-start gap-2.5 group"
+                        >
+                          <div className="p-1.5 bg-slate-100 text-slate-700 rounded-lg group-hover:bg-slate-200 transition-colors mt-0.5">
+                            <Users size={14} />
+                          </div>
+                          <div>
+                            <p className="text-xs font-bold text-slate-900 leading-tight">
+                              {activeUnit === 'SP' ? 'Clientes EXCETO Franco da Rocha (.TXT)' : 'Clientes EXCETO Sábado (.TXT)'}
+                            </p>
+                            <p className="text-[10px] text-slate-500 font-mono mt-0.5">
+                              {clients.filter(c => activeUnit === 'SP' ? !c.clienteFrancoDaRocha : !c.clienteSabado).length} outros contatos
+                            </p>
+                          </div>
+                        </button>
+                      </div>
 
                       {/* Quick Copy Phone Numbers Section */}
                       <div className="border-t border-slate-100 my-1 pt-1.5 pb-0.5">
@@ -936,6 +1014,24 @@ export default function App() {
                           Copiar Telefones
                         </span>
                         <div className="grid grid-cols-2 gap-1 px-1">
+                          <button
+                            onClick={() => {
+                              handleCopyPhones('ativos');
+                              setIsDownloadMenuOpen(false);
+                            }}
+                            className="text-[10px] font-mono font-bold py-1.5 px-2 bg-emerald-100 hover:bg-emerald-200 text-emerald-950 rounded-lg border border-emerald-300/60 transition-all text-center"
+                          >
+                            📋 Copiar Ativos
+                          </button>
+                          <button
+                            onClick={() => {
+                              handleCopyPhones('todos');
+                              setIsDownloadMenuOpen(false);
+                            }}
+                            className="text-[10px] font-mono font-bold py-1.5 px-2 bg-sky-100 hover:bg-sky-200 text-sky-950 rounded-lg border border-sky-300/60 transition-all text-center"
+                          >
+                            📋 Copiar Todos
+                          </button>
                           <button
                             onClick={() => {
                               handleCopyPhones('sabado-apenas');
@@ -957,53 +1053,59 @@ export default function App() {
                         </div>
                       </div>
 
-                      <button
-                        onClick={() => {
-                          handleDownloadClientsTXT('40');
-                          setIsDownloadMenuOpen(false);
-                        }}
-                        className="w-full text-left px-2.5 py-2 hover:bg-amber-50/50 rounded-xl transition-colors flex items-start gap-2.5 group"
-                      >
-                        <div className="p-1.5 bg-amber-50 text-amber-600 rounded-lg group-hover:bg-amber-100 transition-colors mt-0.5">
-                          <Clock size={14} />
-                        </div>
-                        <div>
-                          <p className="text-xs font-bold text-slate-900 leading-tight">Inativos há +40 Dias</p>
-                          <p className="text-[10px] text-slate-500 font-mono mt-0.5">Sem compras nos últimos 40 dias</p>
-                        </div>
-                      </button>
+                      {/* INACTIVE CLIENTS SECTION */}
+                      <div className="border-t border-slate-100 pt-1.5">
+                        <span className="text-[9px] font-black tracking-wider uppercase text-rose-500 font-mono block px-2.5 pb-1">
+                          Clientes Inativos
+                        </span>
+                        <button
+                          onClick={() => {
+                            handleDownloadClientsTXT('40');
+                            setIsDownloadMenuOpen(false);
+                          }}
+                          className="w-full text-left px-2.5 py-1.5 hover:bg-amber-50/50 rounded-xl transition-colors flex items-start gap-2.5 group"
+                        >
+                          <div className="p-1.5 bg-amber-50 text-amber-600 rounded-lg group-hover:bg-amber-100 transition-colors mt-0.5">
+                            <Clock size={14} />
+                          </div>
+                          <div>
+                            <p className="text-xs font-bold text-slate-900 leading-tight">Inativos há +40 Dias</p>
+                            <p className="text-[10px] text-slate-500 font-mono mt-0.5">Sem compras nos últimos 40 dias</p>
+                          </div>
+                        </button>
 
-                      <button
-                        onClick={() => {
-                          handleDownloadClientsTXT('50');
-                          setIsDownloadMenuOpen(false);
-                        }}
-                        className="w-full text-left px-2.5 py-2 hover:bg-amber-50/50 rounded-xl transition-colors flex items-start gap-2.5 group"
-                      >
-                        <div className="p-1.5 bg-amber-50 text-amber-600 rounded-lg group-hover:bg-amber-100 transition-colors mt-0.5">
-                          <Clock size={14} />
-                        </div>
-                        <div>
-                          <p className="text-xs font-bold text-slate-900 leading-tight">Inativos há +50 Dias</p>
-                          <p className="text-[10px] text-slate-500 font-mono mt-0.5">Sem compras nos últimos 50 dias</p>
-                        </div>
-                      </button>
+                        <button
+                          onClick={() => {
+                            handleDownloadClientsTXT('50');
+                            setIsDownloadMenuOpen(false);
+                          }}
+                          className="w-full text-left px-2.5 py-1.5 hover:bg-amber-50/50 rounded-xl transition-colors flex items-start gap-2.5 group"
+                        >
+                          <div className="p-1.5 bg-amber-50 text-amber-600 rounded-lg group-hover:bg-amber-100 transition-colors mt-0.5">
+                            <Clock size={14} />
+                          </div>
+                          <div>
+                            <p className="text-xs font-bold text-slate-900 leading-tight">Inativos há +50 Dias</p>
+                            <p className="text-[10px] text-slate-500 font-mono mt-0.5">Sem compras nos últimos 50 dias</p>
+                          </div>
+                        </button>
 
-                      <button
-                        onClick={() => {
-                          handleDownloadClientsTXT('60');
-                          setIsDownloadMenuOpen(false);
-                        }}
-                        className="w-full text-left px-2.5 py-2 hover:bg-rose-50/50 rounded-xl transition-colors flex items-start gap-2.5 group"
-                      >
-                        <div className="p-1.5 bg-rose-55 text-rose-600 rounded-lg group-hover:bg-rose-100 transition-colors mt-0.5">
-                          <Clock size={14} />
-                        </div>
-                        <div>
-                          <p className="text-xs font-bold text-slate-900 leading-tight">Inativos há +60 Dias</p>
-                          <p className="text-[10px] text-slate-500 font-mono mt-0.5">Foco em reengajamento (+60 dias)</p>
-                        </div>
-                      </button>
+                        <button
+                          onClick={() => {
+                            handleDownloadClientsTXT('60');
+                            setIsDownloadMenuOpen(false);
+                          }}
+                          className="w-full text-left px-2.5 py-1.5 hover:bg-rose-50/50 rounded-xl transition-colors flex items-start gap-2.5 group"
+                        >
+                          <div className="p-1.5 bg-rose-50 text-rose-600 rounded-lg group-hover:bg-rose-100 transition-colors mt-0.5">
+                            <Clock size={14} />
+                          </div>
+                          <div>
+                            <p className="text-xs font-bold text-slate-900 leading-tight">Inativos há +60 Dias</p>
+                            <p className="text-[10px] text-slate-500 font-mono mt-0.5">Foco em reengajamento (+60 dias)</p>
+                          </div>
+                        </button>
+                      </div>
 
                       <div className="border-t border-slate-100 my-2 pt-2">
                         <span className="text-[9px] font-black tracking-wider uppercase text-slate-400 font-mono block px-2.5 pb-2">
@@ -1179,6 +1281,7 @@ export default function App() {
                   <div className="flex flex-wrap gap-1.5">
                     {[
                       { id: 'todos', label: 'Todos' },
+                      { id: 'ativos', label: '✅ Clientes Ativos' },
                       { id: 'sabado', label: activeUnit === 'SP' ? '🏙️ Clientes Franco da Rocha' : '🗓️ Clientes de Sábado' },
                       { id: 'sabado-exceto', label: activeUnit === 'SP' ? 'Outros Clientes (Sem Franco)' : 'Outros Dias (Sem Sábado)' },
                       { id: 'sem-nome', label: 'Sem Nome' },
