@@ -20,6 +20,7 @@ import {
 import CommandBox from './components/CommandBox';
 import NewOrderModal from './components/NewOrderModal';
 import NewClientModal from './components/NewClientModal';
+import * as XLSX from 'xlsx';
 import { 
   Users, 
   Clock, 
@@ -45,7 +46,8 @@ import {
   Download,
   Upload,
   Pencil,
-  FileText
+  FileText,
+  FileSpreadsheet
 } from 'lucide-react';
 
 const getLocalStorageKey = (unit: 'SP' | 'Guarulhos') => {
@@ -78,6 +80,7 @@ export default function App() {
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [editingOrderId, setEditingOrderId] = useState<string | null>(null);
   const [isDownloadMenuOpen, setIsDownloadMenuOpen] = useState(false);
+  const [downloadFormatTab, setDownloadFormatTab] = useState<'excel' | 'txt' | 'copiar'>('excel');
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -477,9 +480,90 @@ export default function App() {
   };
 
   /**
+   * Baixa a lista de clientes no formato Excel (.xlsx) com exatamente:
+   * Coluna A: Números (Telefone)
+   * Coluna B: Nomes (Nome)
+   */
+  const handleDownloadClientsExcel = (filterType: 'todos' | 'ativos' | 'ativos-30' | 'sabado-apenas' | 'sabado-exceto' | '40' | '50' | '60' | 'atual') => {
+    if (clients.length === 0) {
+      showToast("Não há clientes cadastrados para exportar.");
+      return;
+    }
+
+    const isSP = activeUnit === 'SP';
+    let filteredList = [...clients];
+    let filename = isSP ? 'clientes_alho_e_so_sp.xlsx' : 'clientes_alho_e_so_guarulhos.xlsx';
+    let label = 'Todos os Contatos';
+
+    if (filterType === 'ativos') {
+      // Clientes ativos: compraram nos últimos 60 dias
+      filteredList = clients.filter(c => c.totalPedidos > 0 && getDaysSince(c.ultimaCompra) <= 60);
+      filename = isSP ? 'clientes_ativos_sp.xlsx' : 'clientes_ativos_guarulhos.xlsx';
+      label = 'Clientes Ativos';
+    } else if (filterType === 'ativos-30') {
+      // Clientes super ativos: compraram nos últimos 30 dias
+      filteredList = clients.filter(c => c.totalPedidos > 0 && getDaysSince(c.ultimaCompra) <= 30);
+      filename = isSP ? 'clientes_ativos_30_dias_sp.xlsx' : 'clientes_ativos_30_dias_guarulhos.xlsx';
+      label = 'Clientes Ativos Recentes (30d)';
+    } else if (filterType === 'sabado-apenas') {
+      filteredList = clients.filter(c => isSP ? c.clienteFrancoDaRocha : c.clienteSabado);
+      filename = isSP ? 'clientes_franco_da_rocha.xlsx' : 'clientes_sabado.xlsx';
+      label = isSP ? 'Clientes Franco da Rocha' : 'Clientes de Sábado';
+    } else if (filterType === 'sabado-exceto') {
+      filteredList = clients.filter(c => isSP ? !c.clienteFrancoDaRocha : !c.clienteSabado);
+      filename = isSP ? 'clientes_exceto_franco_da_rocha.xlsx' : 'clientes_exceto_sabado.xlsx';
+      label = isSP ? 'Clientes Exceto Franco da Rocha' : 'Clientes Exceto Sábado';
+    } else if (filterType === '40') {
+      filteredList = clients.filter(c => c.totalPedidos === 0 || (c.ultimaCompra && getDaysSince(c.ultimaCompra) > 40));
+      filename = isSP ? 'clientes_inativos_40_dias_sp.xlsx' : 'clientes_inativos_40_dias_guarulhos.xlsx';
+      label = 'Inativos +40 dias';
+    } else if (filterType === '50') {
+      filteredList = clients.filter(c => c.totalPedidos === 0 || (c.ultimaCompra && getDaysSince(c.ultimaCompra) > 50));
+      filename = isSP ? 'clientes_inativos_50_dias_sp.xlsx' : 'clientes_inativos_50_dias_guarulhos.xlsx';
+      label = 'Inativos +50 dias';
+    } else if (filterType === '60') {
+      filteredList = clients.filter(c => c.totalPedidos === 0 || (c.ultimaCompra && getDaysSince(c.ultimaCompra) > 60));
+      filename = isSP ? 'clientes_inativos_60_dias_sp.xlsx' : 'clientes_inativos_60_dias_guarulhos.xlsx';
+      label = 'Inativos +60 dias';
+    } else if (filterType === 'atual') {
+      filteredList = [...filteredClients];
+      filename = isSP ? 'clientes_filtrados_sp.xlsx' : 'clientes_filtrados_guarulhos.xlsx';
+      label = 'Visualização Atual Filtrada';
+    }
+
+    if (filteredList.length === 0) {
+      showToast(`Nenhum contato encontrado na categoria: ${label}`);
+      return;
+    }
+
+    const sortedList = [...filteredList].sort((a, b) => a.nome.localeCompare(b.nome));
+
+    // Formato especificado pelo usuário:
+    // Coluna A: Números (Telefone) | Coluna B: Nomes
+    const rows = [
+      ["Número", "Nome"],
+      ...sortedList.map(c => [c.telefone, c.nome])
+    ];
+
+    const ws = XLSX.utils.aoa_to_sheet(rows);
+    
+    // Configura a largura das colunas
+    ws['!cols'] = [
+      { wch: 20 }, // Coluna A: Número
+      { wch: 40 }  // Coluna B: Nome
+    ];
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Contatos");
+
+    XLSX.writeFile(wb, filename);
+    showToast(`Excel (.xlsx) baixado: ${sortedList.length} clientes (${label})!`);
+  };
+
+  /**
    * Baixa a lista completa de clientes e telefones formatada em .txt (filtrada ou geral)
    */
-  const handleDownloadClientsTXT = (filterType: 'todos' | 'ativos' | 'ativos-30' | 'sabado-apenas' | 'sabado-exceto' | '40' | '50' | '60') => {
+  const handleDownloadClientsTXT = (filterType: 'todos' | 'ativos' | 'ativos-30' | 'sabado-apenas' | 'sabado-exceto' | '40' | '50' | '60' | 'atual') => {
     if (clients.length === 0) {
       showToast("Não há clientes cadastrados para exportar.");
       return;
@@ -523,6 +607,10 @@ export default function App() {
       filteredList = clients.filter(c => c.totalPedidos === 0 || (c.ultimaCompra && getDaysSince(c.ultimaCompra) > 60));
       filename = isSP ? 'clientes_alho_e_so_inativos_60_dias_sp.txt' : 'clientes_alho_e_so_inativos_60_dias_guarulhos.txt';
       label = 'Sem compras +60 dias';
+    } else if (filterType === 'atual') {
+      filteredList = [...filteredClients];
+      filename = isSP ? 'clientes_filtrados_sp.txt' : 'clientes_filtrados_guarulhos.txt';
+      label = 'Visualização Atual Filtrada';
     }
 
     if (filteredList.length === 0) {
@@ -877,15 +965,16 @@ export default function App() {
             <div className="relative">
               <button
                 onClick={() => setIsDownloadMenuOpen(!isDownloadMenuOpen)}
-                title="Opções de Download da lista de contatos em formato .txt"
+                title="Opções de Download da lista de contatos em Excel (.xlsx) ou Texto (.txt)"
                 className={`text-xs font-bold font-mono px-3.5 py-2 border rounded-xl transition-all flex items-center gap-2 ${
                   isDownloadMenuOpen 
-                    ? 'bg-slate-200 text-slate-900 border-slate-300 shadow-inner' 
-                    : 'bg-slate-50 hover:bg-slate-100 text-slate-700 hover:text-slate-800 border-slate-200'
+                    ? 'bg-emerald-100 text-emerald-950 border-emerald-300 shadow-inner' 
+                    : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border-emerald-200 shadow-xs'
                 }`}
               >
-                <Download size={14} className="text-slate-500" />
-                BAIXAR TXT
+                <FileSpreadsheet size={15} className="text-emerald-700" />
+                <span>BAIXAR EXCEL</span>
+                <span className="text-[9px] bg-emerald-200/80 text-emerald-900 font-bold px-1.5 py-0.5 rounded">.XLSX</span>
               </button>
               
               {isDownloadMenuOpen && (
@@ -894,33 +983,234 @@ export default function App() {
                     className="fixed inset-0 z-40" 
                     onClick={() => setIsDownloadMenuOpen(false)} 
                   />
-                  <div className="absolute right-0 top-full mt-2 w-80 bg-white rounded-2xl shadow-xl border border-slate-200 z-50 p-2.5 text-left max-h-[85vh] overflow-y-auto">
-                    <span className="text-[9px] font-black tracking-wider uppercase text-slate-400 font-mono block px-2.5 pb-2 border-b border-slate-100">
-                      Exportar Contatos (.TXT)
-                    </span>
-                    <div className="mt-1.5 space-y-1">
-                      {/* All Clients */}
+                  <div className="absolute right-0 top-full mt-2 w-96 bg-white rounded-2xl shadow-2xl border border-slate-200 z-50 p-3 text-left max-h-[85vh] overflow-y-auto">
+                    
+                    {/* Format Switcher Tabs */}
+                    <div className="flex bg-slate-100 p-1 rounded-xl gap-1 mb-2.5">
                       <button
-                        onClick={() => {
-                          handleDownloadClientsTXT('todos');
-                          setIsDownloadMenuOpen(false);
-                        }}
-                        className="w-full text-left px-2.5 py-2 hover:bg-slate-50 rounded-xl transition-colors flex items-start gap-2.5 group"
+                        onClick={() => setDownloadFormatTab('excel')}
+                        className={`flex-1 py-1.5 px-2 text-[11px] font-bold font-mono rounded-lg transition-all flex items-center justify-center gap-1.5 ${
+                          downloadFormatTab === 'excel'
+                            ? 'bg-emerald-600 text-white shadow-sm'
+                            : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+                        }`}
                       >
-                        <div className="p-1.5 bg-sky-50 text-sky-600 rounded-lg group-hover:bg-sky-100 transition-colors mt-0.5">
-                          <Users size={14} />
-                        </div>
-                        <div>
-                          <p className="text-xs font-bold text-slate-900 leading-tight">Todos os Contatos (.TXT)</p>
-                          <p className="text-[10px] text-slate-500 font-mono mt-0.5">Sem filtros ({clients.length} contatos)</p>
-                        </div>
+                        <FileSpreadsheet size={13} />
+                        Excel (.xlsx)
                       </button>
+                      <button
+                        onClick={() => setDownloadFormatTab('txt')}
+                        className={`flex-1 py-1.5 px-2 text-[11px] font-bold font-mono rounded-lg transition-all flex items-center justify-center gap-1.5 ${
+                          downloadFormatTab === 'txt'
+                            ? 'bg-slate-800 text-white shadow-sm'
+                            : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+                        }`}
+                      >
+                        <FileText size={13} />
+                        Texto (.txt)
+                      </button>
+                      <button
+                        onClick={() => setDownloadFormatTab('copiar')}
+                        className={`flex-1 py-1.5 px-2 text-[11px] font-bold font-mono rounded-lg transition-all flex items-center justify-center gap-1.5 ${
+                          downloadFormatTab === 'copiar'
+                            ? 'bg-slate-800 text-white shadow-sm'
+                            : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+                        }`}
+                      >
+                        <Upload size={13} />
+                        Mais
+                      </button>
+                    </div>
 
-                      {/* ACTIVE CLIENTS (NEW) */}
-                      <div className="border-t border-slate-100 pt-1.5">
-                        <span className="text-[9px] font-black tracking-wider uppercase text-emerald-600 font-mono block px-2.5 pb-1">
-                          Clientes Ativos
+                    {/* TAB CONTENT: EXCEL (.XLSX) */}
+                    {downloadFormatTab === 'excel' && (
+                      <div>
+                        {/* Format Note for User */}
+                        <div className="bg-emerald-50 border border-emerald-200/80 rounded-xl p-2 mb-2 text-[10px] text-emerald-900 font-mono flex items-center justify-between">
+                          <span className="font-bold">📊 Formato da Planilha:</span>
+                          <span className="bg-emerald-200/60 px-1.5 py-0.5 rounded font-black">Col A: Números | Col B: Nomes</span>
+                        </div>
+
+                        <div className="space-y-1">
+                          {/* Active Clients (Highlighted) */}
+                          <div className="pb-1">
+                            <span className="text-[9px] font-black tracking-wider uppercase text-emerald-700 font-mono block px-2 pb-1">
+                              Clientes Ativos
+                            </span>
+                            <button
+                              onClick={() => {
+                                handleDownloadClientsExcel('ativos');
+                                setIsDownloadMenuOpen(false);
+                              }}
+                              className="w-full text-left px-2.5 py-2 hover:bg-emerald-100/80 rounded-xl transition-colors flex items-start gap-2.5 group bg-emerald-50 border border-emerald-200/60"
+                            >
+                              <div className="p-1.5 bg-emerald-600 text-white rounded-lg shadow-xs mt-0.5">
+                                <UserCheck size={14} />
+                              </div>
+                              <div>
+                                <p className="text-xs font-black text-emerald-950 leading-tight flex items-center gap-1">
+                                  ✅ Apenas Clientes Ativos (.XLSX)
+                                </p>
+                                <p className="text-[10px] text-emerald-800 font-mono mt-0.5">
+                                  {activeCount} clientes (compras nos últimos 60 dias)
+                                </p>
+                              </div>
+                            </button>
+
+                            <button
+                              onClick={() => {
+                                handleDownloadClientsExcel('ativos-30');
+                                setIsDownloadMenuOpen(false);
+                              }}
+                              className="w-full text-left px-2.5 py-2 hover:bg-emerald-50 rounded-xl transition-colors flex items-start gap-2.5 group mt-1"
+                            >
+                              <div className="p-1.5 bg-emerald-100 text-emerald-700 rounded-lg group-hover:bg-emerald-200 transition-colors mt-0.5">
+                                <Sparkles size={14} />
+                              </div>
+                              <div>
+                                <p className="text-xs font-bold text-slate-900 leading-tight">
+                                  ⚡ Ativos Recentes (Até 30 dias)
+                                </p>
+                                <p className="text-[10px] text-slate-500 font-mono mt-0.5">
+                                  {clients.filter(c => c.totalPedidos > 0 && getDaysSince(c.ultimaCompra) <= 30).length} clientes mais frequentes
+                                </p>
+                              </div>
+                            </button>
+                          </div>
+
+                          {/* All Clients & Current Screen Filter */}
+                          <div className="border-t border-slate-100 pt-1.5">
+                            <span className="text-[9px] font-black tracking-wider uppercase text-slate-400 font-mono block px-2 pb-1">
+                              Todos os Contatos
+                            </span>
+                            <button
+                              onClick={() => {
+                                handleDownloadClientsExcel('todos');
+                                setIsDownloadMenuOpen(false);
+                              }}
+                              className="w-full text-left px-2.5 py-2 hover:bg-slate-50 rounded-xl transition-colors flex items-start gap-2.5 group"
+                            >
+                              <div className="p-1.5 bg-sky-50 text-sky-600 rounded-lg group-hover:bg-sky-100 transition-colors mt-0.5">
+                                <Users size={14} />
+                              </div>
+                              <div>
+                                <p className="text-xs font-bold text-slate-900 leading-tight">Todos os Contatos (.XLSX)</p>
+                                <p className="text-[10px] text-slate-500 font-mono mt-0.5">Sem filtros ({clients.length} contatos cadastrados)</p>
+                              </div>
+                            </button>
+
+                            <button
+                              onClick={() => {
+                                handleDownloadClientsExcel('atual');
+                                setIsDownloadMenuOpen(false);
+                              }}
+                              className="w-full text-left px-2.5 py-2 hover:bg-slate-50 rounded-xl transition-colors flex items-start gap-2.5 group"
+                            >
+                              <div className="p-1.5 bg-amber-50 text-amber-700 rounded-lg group-hover:bg-amber-100 transition-colors mt-0.5">
+                                <Filter size={14} />
+                              </div>
+                              <div>
+                                <p className="text-xs font-bold text-slate-900 leading-tight">Filtro Atual da Tela (.XLSX)</p>
+                                <p className="text-[10px] text-slate-500 font-mono mt-0.5">Exporta os {filteredClients.length} contatos da tabela</p>
+                              </div>
+                            </button>
+                          </div>
+
+                          {/* Unit Tag Options */}
+                          <div className="border-t border-slate-100 pt-1.5">
+                            <span className="text-[9px] font-black tracking-wider uppercase text-amber-600 font-mono block px-2 pb-1">
+                              {activeUnit === 'SP' ? 'Região / Tag' : 'Dias da Semana'}
+                            </span>
+                            <button
+                              onClick={() => {
+                                handleDownloadClientsExcel('sabado-apenas');
+                                setIsDownloadMenuOpen(false);
+                              }}
+                              className="w-full text-left px-2.5 py-2 hover:bg-amber-50 rounded-xl transition-colors flex items-start gap-2.5 group"
+                            >
+                              <div className="p-1.5 bg-amber-100 text-amber-800 rounded-lg group-hover:bg-amber-200 transition-colors mt-0.5">
+                                <Calendar size={14} />
+                              </div>
+                              <div>
+                                <p className="text-xs font-bold text-slate-900 leading-tight">
+                                  {activeUnit === 'SP' ? '🏙️ Clientes Franco da Rocha (.XLSX)' : '🗓️ Apenas Clientes de Sábado (.XLSX)'}
+                                </p>
+                                <p className="text-[10px] text-amber-700 font-mono mt-0.5">
+                                  {clients.filter(c => activeUnit === 'SP' ? c.clienteFrancoDaRocha : c.clienteSabado).length} clientes marcados
+                                </p>
+                              </div>
+                            </button>
+
+                            <button
+                              onClick={() => {
+                                handleDownloadClientsExcel('sabado-exceto');
+                                setIsDownloadMenuOpen(false);
+                              }}
+                              className="w-full text-left px-2.5 py-2 hover:bg-slate-50 rounded-xl transition-colors flex items-start gap-2.5 group"
+                            >
+                              <div className="p-1.5 bg-slate-100 text-slate-700 rounded-lg group-hover:bg-slate-200 transition-colors mt-0.5">
+                                <Users size={14} />
+                              </div>
+                              <div>
+                                <p className="text-xs font-bold text-slate-900 leading-tight">
+                                  {activeUnit === 'SP' ? 'Clientes EXCETO Franco da Rocha (.XLSX)' : 'Clientes EXCETO Sábado (.XLSX)'}
+                                </p>
+                                <p className="text-[10px] text-slate-500 font-mono mt-0.5">
+                                  {clients.filter(c => activeUnit === 'SP' ? !c.clienteFrancoDaRocha : !c.clienteSabado).length} outros contatos
+                                </p>
+                              </div>
+                            </button>
+                          </div>
+
+                          {/* Inactive Clients Section */}
+                          <div className="border-t border-slate-100 pt-1.5">
+                            <span className="text-[9px] font-black tracking-wider uppercase text-rose-500 font-mono block px-2 pb-1">
+                              Clientes Inativos (Excel)
+                            </span>
+                            <div className="grid grid-cols-3 gap-1">
+                              <button
+                                onClick={() => {
+                                  handleDownloadClientsExcel('40');
+                                  setIsDownloadMenuOpen(false);
+                                }}
+                                className="text-left p-2 hover:bg-amber-50 rounded-xl transition-colors border border-slate-100 text-center"
+                              >
+                                <p className="text-[11px] font-bold text-amber-900">+40 Dias</p>
+                                <p className="text-[9px] text-slate-500 font-mono">Inativos</p>
+                              </button>
+                              <button
+                                onClick={() => {
+                                  handleDownloadClientsExcel('50');
+                                  setIsDownloadMenuOpen(false);
+                                }}
+                                className="text-left p-2 hover:bg-amber-50 rounded-xl transition-colors border border-slate-100 text-center"
+                              >
+                                <p className="text-[11px] font-bold text-amber-900">+50 Dias</p>
+                                <p className="text-[9px] text-slate-500 font-mono">Inativos</p>
+                              </button>
+                              <button
+                                onClick={() => {
+                                  handleDownloadClientsExcel('60');
+                                  setIsDownloadMenuOpen(false);
+                                }}
+                                className="text-left p-2 hover:bg-rose-50 rounded-xl transition-colors border border-slate-100 text-center"
+                              >
+                                <p className="text-[11px] font-bold text-rose-900">+60 Dias</p>
+                                <p className="text-[9px] text-rose-600 font-mono">Reengajamento</p>
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* TAB CONTENT: TXT */}
+                    {downloadFormatTab === 'txt' && (
+                      <div className="space-y-1">
+                        <span className="text-[9px] font-black tracking-wider uppercase text-slate-400 font-mono block px-2 pb-1">
+                          Exportar em Arquivo Texto (.TXT)
                         </span>
+                        
                         <button
                           onClick={() => {
                             handleDownloadClientsTXT('ativos');
@@ -932,57 +1222,47 @@ export default function App() {
                             <UserCheck size={14} />
                           </div>
                           <div>
-                            <p className="text-xs font-black text-emerald-950 leading-tight flex items-center gap-1">
+                            <p className="text-xs font-black text-emerald-950 leading-tight">
                               ✅ Apenas Clientes Ativos (.TXT)
                             </p>
                             <p className="text-[10px] text-emerald-700 font-mono mt-0.5">
-                              {activeCount} clientes (compras até 60 dias)
+                              {activeCount} clientes (até 60 dias)
                             </p>
                           </div>
                         </button>
 
                         <button
                           onClick={() => {
-                            handleDownloadClientsTXT('ativos-30');
+                            handleDownloadClientsTXT('todos');
                             setIsDownloadMenuOpen(false);
                           }}
-                          className="w-full text-left px-2.5 py-2 hover:bg-emerald-50/70 rounded-xl transition-colors flex items-start gap-2.5 group"
+                          className="w-full text-left px-2.5 py-2 hover:bg-slate-50 rounded-xl transition-colors flex items-start gap-2.5 group"
                         >
-                          <div className="p-1.5 bg-emerald-50 text-emerald-700 rounded-lg group-hover:bg-emerald-100 transition-colors mt-0.5">
-                            <Sparkles size={14} />
+                          <div className="p-1.5 bg-sky-50 text-sky-600 rounded-lg group-hover:bg-sky-100 transition-colors mt-0.5">
+                            <Users size={14} />
                           </div>
                           <div>
-                            <p className="text-xs font-bold text-slate-900 leading-tight">
-                              ⚡ Ativos Recentes (Até 30 dias)
-                            </p>
-                            <p className="text-[10px] text-slate-500 font-mono mt-0.5">
-                              {clients.filter(c => c.totalPedidos > 0 && getDaysSince(c.ultimaCompra) <= 30).length} clientes mais frequentes
-                            </p>
+                            <p className="text-xs font-bold text-slate-900 leading-tight">Todos os Contatos (.TXT)</p>
+                            <p className="text-[10px] text-slate-500 font-mono mt-0.5">{clients.length} contatos</p>
                           </div>
                         </button>
-                      </div>
 
-                      {/* Unit Tag Client Export Options (Franco da Rocha for SP / Sábado for Guarulhos) */}
-                      <div className="border-t border-slate-100 pt-1.5">
-                        <span className="text-[9px] font-black tracking-wider uppercase text-amber-600 font-mono block px-2.5 pb-1">
-                          {activeUnit === 'SP' ? 'Região / Tag' : 'Dias da Semana'}
-                        </span>
                         <button
                           onClick={() => {
                             handleDownloadClientsTXT('sabado-apenas');
                             setIsDownloadMenuOpen(false);
                           }}
-                          className="w-full text-left px-2.5 py-2 hover:bg-amber-50 rounded-xl transition-colors flex items-start gap-2.5 group bg-amber-50/40"
+                          className="w-full text-left px-2.5 py-2 hover:bg-amber-50 rounded-xl transition-colors flex items-start gap-2.5 group"
                         >
                           <div className="p-1.5 bg-amber-100 text-amber-800 rounded-lg group-hover:bg-amber-200 transition-colors mt-0.5">
                             <Calendar size={14} />
                           </div>
                           <div>
-                            <p className="text-xs font-black text-amber-950 leading-tight flex items-center gap-1">
-                              {activeUnit === 'SP' ? '🏙️ Clientes Franco da Rocha (.TXT)' : '🗓️ Apenas Clientes de Sábado (.TXT)'}
+                            <p className="text-xs font-bold text-slate-900 leading-tight">
+                              {activeUnit === 'SP' ? '🏙️ Franco da Rocha (.TXT)' : '🗓️ Clientes de Sábado (.TXT)'}
                             </p>
-                            <p className="text-[10px] text-amber-700/80 font-mono mt-0.5">
-                              {clients.filter(c => activeUnit === 'SP' ? c.clienteFrancoDaRocha : c.clienteSabado).length} clientes marcados
+                            <p className="text-[10px] text-amber-700 font-mono mt-0.5">
+                              {clients.filter(c => activeUnit === 'SP' ? c.clienteFrancoDaRocha : c.clienteSabado).length} clientes
                             </p>
                           </div>
                         </button>
@@ -999,155 +1279,105 @@ export default function App() {
                           </div>
                           <div>
                             <p className="text-xs font-bold text-slate-900 leading-tight">
-                              {activeUnit === 'SP' ? 'Clientes EXCETO Franco da Rocha (.TXT)' : 'Clientes EXCETO Sábado (.TXT)'}
+                              {activeUnit === 'SP' ? 'Clientes EXCETO Franco (.TXT)' : 'Clientes EXCETO Sábado (.TXT)'}
                             </p>
                             <p className="text-[10px] text-slate-500 font-mono mt-0.5">
-                              {clients.filter(c => activeUnit === 'SP' ? !c.clienteFrancoDaRocha : !c.clienteSabado).length} outros contatos
+                              {clients.filter(c => activeUnit === 'SP' ? !c.clienteFrancoDaRocha : !c.clienteSabado).length} outros
                             </p>
                           </div>
                         </button>
                       </div>
+                    )}
 
-                      {/* Quick Copy Phone Numbers Section */}
-                      <div className="border-t border-slate-100 my-1 pt-1.5 pb-0.5">
-                        <span className="text-[9px] font-black tracking-wider uppercase text-slate-400 font-mono block px-2.5 pb-1">
-                          Copiar Telefones
-                        </span>
-                        <div className="grid grid-cols-2 gap-1 px-1">
-                          <button
-                            onClick={() => {
-                              handleCopyPhones('ativos');
-                              setIsDownloadMenuOpen(false);
-                            }}
-                            className="text-[10px] font-mono font-bold py-1.5 px-2 bg-emerald-100 hover:bg-emerald-200 text-emerald-950 rounded-lg border border-emerald-300/60 transition-all text-center"
-                          >
-                            📋 Copiar Ativos
-                          </button>
-                          <button
-                            onClick={() => {
-                              handleCopyPhones('todos');
-                              setIsDownloadMenuOpen(false);
-                            }}
-                            className="text-[10px] font-mono font-bold py-1.5 px-2 bg-sky-100 hover:bg-sky-200 text-sky-950 rounded-lg border border-sky-300/60 transition-all text-center"
-                          >
-                            📋 Copiar Todos
-                          </button>
-                          <button
-                            onClick={() => {
-                              handleCopyPhones('sabado-apenas');
-                              setIsDownloadMenuOpen(false);
-                            }}
-                            className="text-[10px] font-mono font-bold py-1.5 px-2 bg-amber-100 hover:bg-amber-200 text-amber-950 rounded-lg border border-amber-300/60 transition-all text-center"
-                          >
-                            {activeUnit === 'SP' ? '📋 Copiar Franco' : '📋 Copiar Sábado'}
-                          </button>
-                          <button
-                            onClick={() => {
-                              handleCopyPhones('sabado-exceto');
-                              setIsDownloadMenuOpen(false);
-                            }}
-                            className="text-[10px] font-mono font-bold py-1.5 px-2 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-lg border border-slate-200 transition-all text-center"
-                          >
-                            📋 Copiar Outros
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* INACTIVE CLIENTS SECTION */}
-                      <div className="border-t border-slate-100 pt-1.5">
-                        <span className="text-[9px] font-black tracking-wider uppercase text-rose-500 font-mono block px-2.5 pb-1">
-                          Clientes Inativos
-                        </span>
-                        <button
-                          onClick={() => {
-                            handleDownloadClientsTXT('40');
-                            setIsDownloadMenuOpen(false);
-                          }}
-                          className="w-full text-left px-2.5 py-1.5 hover:bg-amber-50/50 rounded-xl transition-colors flex items-start gap-2.5 group"
-                        >
-                          <div className="p-1.5 bg-amber-50 text-amber-600 rounded-lg group-hover:bg-amber-100 transition-colors mt-0.5">
-                            <Clock size={14} />
-                          </div>
-                          <div>
-                            <p className="text-xs font-bold text-slate-900 leading-tight">Inativos há +40 Dias</p>
-                            <p className="text-[10px] text-slate-500 font-mono mt-0.5">Sem compras nos últimos 40 dias</p>
-                          </div>
-                        </button>
-
-                        <button
-                          onClick={() => {
-                            handleDownloadClientsTXT('50');
-                            setIsDownloadMenuOpen(false);
-                          }}
-                          className="w-full text-left px-2.5 py-1.5 hover:bg-amber-50/50 rounded-xl transition-colors flex items-start gap-2.5 group"
-                        >
-                          <div className="p-1.5 bg-amber-50 text-amber-600 rounded-lg group-hover:bg-amber-100 transition-colors mt-0.5">
-                            <Clock size={14} />
-                          </div>
-                          <div>
-                            <p className="text-xs font-bold text-slate-900 leading-tight">Inativos há +50 Dias</p>
-                            <p className="text-[10px] text-slate-500 font-mono mt-0.5">Sem compras nos últimos 50 dias</p>
-                          </div>
-                        </button>
-
-                        <button
-                          onClick={() => {
-                            handleDownloadClientsTXT('60');
-                            setIsDownloadMenuOpen(false);
-                          }}
-                          className="w-full text-left px-2.5 py-1.5 hover:bg-rose-50/50 rounded-xl transition-colors flex items-start gap-2.5 group"
-                        >
-                          <div className="p-1.5 bg-rose-50 text-rose-600 rounded-lg group-hover:bg-rose-100 transition-colors mt-0.5">
-                            <Clock size={14} />
-                          </div>
-                          <div>
-                            <p className="text-xs font-bold text-slate-900 leading-tight">Inativos há +60 Dias</p>
-                            <p className="text-[10px] text-slate-500 font-mono mt-0.5">Foco em reengajamento (+60 dias)</p>
-                          </div>
-                        </button>
-                      </div>
-
-                      <div className="border-t border-slate-100 my-2 pt-2">
-                        <span className="text-[9px] font-black tracking-wider uppercase text-slate-400 font-mono block px-2.5 pb-2">
-                          Backup Completo do CRM (JSON)
-                        </span>
-                        
-                        <button
-                          onClick={() => {
-                            handleExportBackupJSON();
-                            setIsDownloadMenuOpen(false);
-                          }}
-                          className="w-full text-left px-2.5 py-2 hover:bg-emerald-50/50 rounded-xl transition-colors flex items-start gap-2.5 group"
-                        >
-                          <div className="p-1.5 bg-emerald-50 text-emerald-600 rounded-lg group-hover:bg-emerald-100 transition-colors mt-0.5">
-                            <Download size={14} />
-                          </div>
-                          <div>
-                            <p className="text-xs font-bold text-slate-900 leading-tight">Exportar Backup JSON</p>
-                            <p className="text-[10px] text-slate-500 font-mono mt-0.5">Salva todos os dados em arquivo</p>
-                          </div>
-                        </button>
-
-                        <label className="w-full text-left px-2.5 py-2 hover:bg-indigo-50/50 rounded-xl transition-colors flex items-start gap-2.5 group cursor-pointer block">
-                          <div className="p-1.5 bg-indigo-50 text-indigo-600 rounded-lg group-hover:bg-indigo-100 transition-colors mt-0.5">
-                            <Upload size={14} />
-                          </div>
-                          <div>
-                            <p className="text-xs font-bold text-slate-900 leading-tight">Importar Backup JSON</p>
-                            <p className="text-[10px] text-slate-500 font-mono mt-0.5 font-bold text-amber-600">Restaurar do seu outro link/aba</p>
-                            <input
-                              type="file"
-                              accept=".json"
-                              onChange={(e) => {
-                                handleImportBackupJSON(e);
+                    {/* TAB CONTENT: COPIAR / BACKUP */}
+                    {downloadFormatTab === 'copiar' && (
+                      <div className="space-y-3">
+                        <div>
+                          <span className="text-[9px] font-black tracking-wider uppercase text-slate-400 font-mono block px-1 pb-1.5">
+                            Copiar Telefones para Área de Transferência
+                          </span>
+                          <div className="grid grid-cols-2 gap-1">
+                            <button
+                              onClick={() => {
+                                handleCopyPhones('ativos');
                                 setIsDownloadMenuOpen(false);
                               }}
-                              className="hidden"
-                            />
+                              className="text-[10px] font-mono font-bold py-2 px-2 bg-emerald-100 hover:bg-emerald-200 text-emerald-950 rounded-lg border border-emerald-300/60 transition-all text-center"
+                            >
+                              📋 Copiar Ativos
+                            </button>
+                            <button
+                              onClick={() => {
+                                handleCopyPhones('todos');
+                                setIsDownloadMenuOpen(false);
+                              }}
+                              className="text-[10px] font-mono font-bold py-2 px-2 bg-sky-100 hover:bg-sky-200 text-sky-950 rounded-lg border border-sky-300/60 transition-all text-center"
+                            >
+                              📋 Copiar Todos
+                            </button>
+                            <button
+                              onClick={() => {
+                                handleCopyPhones('sabado-apenas');
+                                setIsDownloadMenuOpen(false);
+                              }}
+                              className="text-[10px] font-mono font-bold py-2 px-2 bg-amber-100 hover:bg-amber-200 text-amber-950 rounded-lg border border-amber-300/60 transition-all text-center"
+                            >
+                              {activeUnit === 'SP' ? '📋 Copiar Franco' : '📋 Copiar Sábado'}
+                            </button>
+                            <button
+                              onClick={() => {
+                                handleCopyPhones('sabado-exceto');
+                                setIsDownloadMenuOpen(false);
+                              }}
+                              className="text-[10px] font-mono font-bold py-2 px-2 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-lg border border-slate-200 transition-all text-center"
+                            >
+                              📋 Copiar Outros
+                            </button>
                           </div>
-                        </label>
+                        </div>
+
+                        <div className="border-t border-slate-100 pt-2">
+                          <span className="text-[9px] font-black tracking-wider uppercase text-slate-400 font-mono block px-1 pb-1.5">
+                            Backup Completo do CRM (JSON)
+                          </span>
+                          
+                          <button
+                            onClick={() => {
+                              handleExportBackupJSON();
+                              setIsDownloadMenuOpen(false);
+                            }}
+                            className="w-full text-left px-2.5 py-2 hover:bg-emerald-50/50 rounded-xl transition-colors flex items-start gap-2.5 group"
+                          >
+                            <div className="p-1.5 bg-emerald-50 text-emerald-600 rounded-lg group-hover:bg-emerald-100 transition-colors mt-0.5">
+                              <Download size={14} />
+                            </div>
+                            <div>
+                              <p className="text-xs font-bold text-slate-900 leading-tight">Exportar Backup JSON</p>
+                              <p className="text-[10px] text-slate-500 font-mono mt-0.5">Salva todos os dados em arquivo</p>
+                            </div>
+                          </button>
+
+                          <label className="w-full text-left px-2.5 py-2 hover:bg-indigo-50/50 rounded-xl transition-colors flex items-start gap-2.5 group cursor-pointer block mt-1">
+                            <div className="p-1.5 bg-indigo-50 text-indigo-600 rounded-lg group-hover:bg-indigo-100 transition-colors mt-0.5">
+                              <Upload size={14} />
+                            </div>
+                            <div>
+                              <p className="text-xs font-bold text-slate-900 leading-tight">Importar Backup JSON</p>
+                              <p className="text-[10px] text-slate-500 font-mono mt-0.5 font-bold text-amber-600">Restaurar de outro arquivo</p>
+                              <input
+                                type="file"
+                                accept=".json"
+                                onChange={(e) => {
+                                  handleImportBackupJSON(e);
+                                  setIsDownloadMenuOpen(false);
+                                }}
+                                className="hidden"
+                              />
+                            </div>
+                          </label>
+                        </div>
                       </div>
-                    </div>
+                    )}
                   </div>
                 </>
               )}
@@ -1271,9 +1501,19 @@ export default function App() {
                         {filteredClients.length} cadastrados
                       </span>
                     </h3>
-                    <div className="flex items-center gap-1">
-                      <Filter size={14} className="text-slate-400" />
-                      <span className="text-[11px] font-mono font-medium text-slate-400 uppercase">Filtros</span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => handleDownloadClientsExcel('atual')}
+                        title="Baixar lista filtrada atual em Excel (Coluna A: Telefones | Coluna B: Nomes)"
+                        className="text-[11px] font-mono font-bold px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-lg transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer"
+                      >
+                        <FileSpreadsheet size={13} className="text-emerald-700" />
+                        <span>Baixar Excel</span>
+                      </button>
+                      <div className="flex items-center gap-1 text-slate-400 pl-1 border-l border-slate-200">
+                        <Filter size={14} className="text-slate-400" />
+                        <span className="text-[11px] font-mono font-medium text-slate-400 uppercase">Filtros</span>
+                      </div>
                     </div>
                   </div>
 
